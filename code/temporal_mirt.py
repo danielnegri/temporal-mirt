@@ -146,9 +146,13 @@ class TMIRT(object):
         # set the stride long enough the same index never occurs twice in the
         # same indexing array on the left side of the assignment
         # (remembering that idx_pre is sorted)
-        for ii in range(0, self.longest_user):
-            E[self.a_to_user[idx_pre[ii::self.longest_user]]] \
-                        += E_sub[ii::self.longest_user]
+        # DEBUG
+        for ii in range(E_sub.shape[0]):
+            E[self.a_to_user[idx_pre[ii]]] \
+                        += E_sub[ii]
+        #for ii in range(self.longest_user):
+        #    E[self.a_to_user[idx_pre[ii::self.longest_user]]] \
+        #                += E_sub[ii::self.longest_user]
 
         return E
 
@@ -245,7 +249,7 @@ class TMIRT(object):
         Phi = self.Phi[:, :, idx_resource]
         J = self.J[:, :, idx_resource]
         # do the actual computation
-        a_predicted = a_pre[:1, :] + np.dot(Phi, a_pre)
+        a_predicted = a_pre[:-1, :] + np.dot(Phi, a_pre)
         a_err = a_post - a_predicted
         dEdPhi = -np.dot(np.dot(J, a_err), a_pre.T)
         return dEdPhi
