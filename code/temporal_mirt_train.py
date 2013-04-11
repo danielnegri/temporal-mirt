@@ -150,6 +150,7 @@ def load_data(options):
     return model
 
 
+# TODO -- numerical precision is worse than expected.  Make sure is using float64.
 def check_gradients_M_step():
     options = get_cmd_line_arguments()
     print >>sys.stderr, "Checking gradients.", options  # DEBUG
@@ -172,10 +173,12 @@ def check_gradients_M_step():
     random.shuffle(test_order)
     for ind in test_order:
         if ind < Phi_l:
+            #continue
             print "Phi",
         elif ind < Phi_l+J_l:
             print "J",
         elif ind < Phi_l+J_l+W_ex_cr_l:
+            #continue
             print "W",
         else:
             print "broken mapping to parameters"
@@ -188,8 +191,6 @@ def check_gradients_M_step():
 
         print "ind", ind, "df pred", df0[ind], "df true", df_true, "df pred - df true", df0[ind] - df_true
 
-        #assert((abs((df_true - df0[ind])/df_true) < 1e-4) or (df0[ind] == 0))
-        
 def main():
     options = get_cmd_line_arguments()
     print >>sys.stderr, "Starting main.", options  # DEBUG

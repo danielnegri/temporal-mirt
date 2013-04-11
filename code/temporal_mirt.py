@@ -227,10 +227,11 @@ class TMIRT(object):
         # do the actual computation
         a_predicted = a_pre[:-1, :] + np.dot(Phi, a_pre)
         a_err = a_post - a_predicted
+
         E = 0.5 * np.sum(a_err*np.dot(J, a_err), axis=0)
         # DEBUG check sign
         # Gaussian normalization term
-        E += -np.sum(np.log(np.linalg.eig(J)[0]))*idx_pre.shape[0]
+        E += -np.sum(np.log(np.linalg.eig(J)[0])) #*idx_pre.shape[0]
 
         E = self.map_energy_abilities_to_users(E, idx_pre)
 
@@ -269,8 +270,10 @@ class TMIRT(object):
         # do the actual computation
         a_predicted = a_pre[:-1, :] + np.dot(Phi, a_pre)
         a_err = a_post - a_predicted
+        
         dEdJ = 0.5*np.dot(a_err, a_err.T)
-        dEdJ += -np.linalg.inv(J)*idx_pre.shape[0]
+        dEdJ += -np.linalg.inv(J.T)*idx_pre.shape[0]
+
         return dEdJ
 
     def E(self, a=None):
