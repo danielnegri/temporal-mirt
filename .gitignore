@@ -1,0 +1,6 @@
+*.pyc
+*.DS_Store
+offline/*
+*~
+tmirt_file=*
+*.responses

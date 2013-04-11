@@ -1,0 +1,95 @@
+\documentclass{article} 
+\newcommand{\set}[1]{\lbrace #1 \rbrace}
+\newcommand{\setc}[2]{\lbrace #1 \mid #2 \rbrace}
+\newcommand{\vv}[1]{{\mathbf{#1}}}
+\newcommand{\dd}{{\mathrm{d}}}
+\newcommand{\pd}[2]{\frac{\partial #1}{\partial #2}}
+\newcommand{\pdn}[3]{\frac{\partial^#1 #2}{\partial #3^#1}}
+\newcommand{\od}[2]{\frac{\dd #1}{\dd #2}}
+\newcommand{\odn}[3]{\frac{\dd^#1 #2}{\dd #3^#1}}
+\newcommand{\avg}[1]{\left< #1 \right>}
+\newcommand{\mb}{\mathbf}
+\newcommand{\mc}{\mathcal}
+\newcommand{\argmin}{\operatornamewithlimits{argmin}}
+
+\usepackage{times}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+
+\title{
+Temporal multidimensional item response theory
+}	
+
+\author{
+Jascha Sohl-Dickstein
+}
+
+\newcommand{\fix}{\marginpar{FIX}}
+\newcommand{\new}{\marginpar{NEW}} 
+
+\begin{document}
+
+\maketitle
+
+$a_{im}^t$ gives the $m$th ability for student $i$ at timestep $t$.  $x_{ij}^t \in \{0,1\}$ is the correctness value of exercise $j$ at timestep $t$ for student $i$.  The conditional probability of getting an exercise correct is
+\begin{align}
+p\left( x_{ij}^t = 1 | \mb a_i^t \right) & = \sigma\left( \mb W_j \mb a_i^t + b_j \right),
+\label{eq cond x}
+\end{align}
+where $W_{jm}$ is the coupling parameter between ability $m$ and exercise $j$, and $b_j$ is the bias associated with exercise $j$.  
+$r_i^t$ is the resource student $i$ is exposed to at timestep $t$, where a resource might be an exercise, a video, or other content.  An exercise answered correctly and the same exercise answered incorrectly are treated as two separate resources.
+
+The prior distribution over the initial ability state is a unit norm Gaussian,
+\begin{align}
+p\left( \mb a_i^1 \right) & = \mc N \left( \mb 0, \mb I\right).
+\end{align}
+The conditional distribution over the abilities at the next timestep given the current timestep is also given by a Gaussian,
+\begin{align}
+p\left(  \mb a_i^{t+1} | \mb a_i^t, r_i^t \right) & = \mc N \left( \left(\mb I + \mb \Phi_{r_i^t}\right) \mb a_i^t + \theta_{r_i^t}, \mb \Sigma_{r_i^t} \right)
+,
+\label{eq cond a}
+\end{align}
+where the matrix $\mb \Phi_{r_i^t}$ and the bias $\theta_{r_i^t}$ are defined for each resource, and determine the mean prediction for the abilities vector at the next time step.  The covariance matrix $\mb \Sigma_{r_i^t}$, also defined for each resource, determines the uncertainty in the abilities vector at the next time step.
+
+The joint energy function is
+\begin{align}
+\nonumber
+E = & 
+\frac{1}{2} \left(\mb a_i^1\right)^T \mb a_i^1 \\ \nonumber
+& + \frac{1}{2}\sum_{t=1}^{T-1} 
+	\left[\mb a_i^{t+1} -   \left(\mb I + \mb \Phi_{r_i^t}\right) \mb a_i^t \right]^T
+		\mb \Sigma_{r_i^t}^{-1}
+	\left[\mb a_i^{t+1} -   \left(\mb I + \mb \Phi_{r_i^t}\right) \mb a_i^t \right]  \\ \nonumber
+& +\sum_{t=1}^{T-1} 
+	\log \det\left( \mb \Sigma_{r_i^t} \right) \\ 
+& - \sum_{x_{ij}^t} \log \sigma\left( \mb W_j \mb a_i^t + b_j \right)
+.
+\label{eq energy}
+\end{align}
+It has gradients
+\begin{align}
+\pd{E}{W_{km}} = 
+& - \sum_{x_{ij}^t} \left( 1 - \sigma\left( \mb W_j \mb a_i^t + b_j \right) \right) a_{im}^t \delta_{kj}
+\label{eq grad W}
+, \\
+\pd{E}{\mb \Phi_{r_i^t}} = & 
+\sum_{t=1}^{T-1}
+	\mb \Sigma_{r_i^t}^{-1}
+	\left[\mb a_i^{t+1} -   \left(\mb I + \mb \Phi_{r_i^t}\right) \mb a_i^t \right]
+	\left(
+		\mb a_i^t
+	\right)^T
+\label{eq grad phi}
+, \\
+\pd{E}{\mb \Sigma_{r_i^t}^{-1}} = & 
+\frac{1}{2} \sum_{t=1}^{T-1}
+	\left[\mb a_i^{t+1} -   \left(\mb I + \mb \Phi_{r_i^t}\right) \mb a_i^t \right]
+	\left[\mb a_i^{t+1} -   \left(\mb I + \mb \Phi_{r_i^t}\right) \mb a_i^t \right]^T
+\nonumber \\
+& + \sum_{t=1}^{T-1}
+	\left(\mb \Sigma_{r_i^t}\right)^T
+\label{eq grad sigma}
+\end{align}
+The bias gradients can be computed by adding a ``bias unit" to the abilities vector.
+
+\end{document}
