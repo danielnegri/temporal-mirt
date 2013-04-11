@@ -4,10 +4,11 @@ a temporal multidimensional item response theory model.
 
 import fileinput
 import numpy as np
-import optparse
+import argparse
 import sys
 import scipy
 import scipy.optimize
+import random
 
 import accuracy_model_util as acc_util
 
@@ -18,49 +19,50 @@ linesplit = acc_util.linesplit
 idx_pl = acc_util.FieldIndexer(acc_util.FieldIndexer.plog_fields)
 
 
-def get_cmd_line_options():
-    parser = optparse.OptionParser()
-    parser.add_option("-a", "--num_abilities", type=int, default=2,
+def get_cmd_line_arguments():
+    parser = argparse.ArgumentParser(description="Train a temporal multi-dimensional item response theory (TMIRT) model.")
+    parser.add_argument("-a", "--num_abilities", type=int, default=2,
            help="Number of hidden ability units.")
-    #parser.add_option("-s", "--sampling_num_steps", type=int, default=10,
+    #parser.add_argument("-s", "--sampling_num_steps", type=int, default=10,
     #   help="Number of sampling steps to use for sample_abilities_diffusion.")
-    parser.add_option("-s", "--sampling_num_steps", type=int, default=100,
+    parser.add_argument("-s", "--sampling_num_steps", type=int, default=100,
         help="Number of sampling steps to use for sample_abilities_diffusion.")
-    parser.add_option("-l", "--sampling_epsilon", type=float, default=None,
+    parser.add_argument("-l", "--sampling_epsilon", type=float, default=None,
      help="The length scale to use for sampling update proposals.")
     # The number of EM iterations to do during learning
-    parser.add_option("-n", "--num_epochs", type=int, default=10000)
+    parser.add_argument("-n", "--num_epochs", type=int, default=10000)
     # The number of copies of the data to train on.  If there is too little
     # training data, increase this number in order to maintain multiple samples
     # from the abilities vector for each student.  A sign that there is too
     # little training data is if the update step length ||dcouplings|| remains
     # large.
-    parser.add_option("-q", "--num_replicas", type=int, default=1)
+    parser.add_argument("-q", "--num_replicas", type=int, default=1)
     # The number of LBFGS descent steps to do per EM iteration
-    parser.add_option("-m", "--max_pass_lbfgs", type=int, default=5)
+    parser.add_argument("-m", "--max_pass_lbfgs", type=int, default=5)
     # The weight for an L2 regularizer on the parameters.  This can be very
     # small, but keeps the weights from running away in a weakly constrained
     # direction.
-    #parser.add_option("-p", "--regularization", default=None) #1e-5)
+    #parser.add_argument("-p", "--regularization", default=None) #1e-5)
     #DEBUG not currently implemented
 
-    #parser.add_option("-u", "--ais_users", type=int, default=10,
+    #parser.add_argument("-u", "--ais_users", type=int, default=10,
     #  help="Number of users to use to compute log likelihood.")
-    parser.add_option("-v", "--ais_steps", type=int, default=1e5,
+    parser.add_argument("-v", "--ais_steps", type=int, default=1e5,
         help="""Maximum number of intermediate distributions (sampling steps)
         to use when computing log likelihood via AIS.  If the estimate doesn't
         converge, then increase this number.""")
     # the source data file
-    parser.add_option("-f", "--file", type=str,
-            default=sys.path[0] + '/data/user_assessment.responses')
+    parser.add_argument("-f", "--file", type=str,
+            default='data/user_assessment.responses')
     # the root filename for output
-    parser.add_option("-o", "--output", type=str, default='')
-    options, _ = parser.parse_args()
+    parser.add_argument("-o", "--output", type=str, default='')
+    # DEBUG use parse_known_args rather than parse_args so can easily run it inside pylab
+    options, _ = parser.parse_known_args()
 
     if options.output == '':
         # default filename
         file_start = options.file.rfind('/')
-        options.output = "output/%stmirt_file=%s_abilities=%d" % (
+        options.output = "%stmirt_file=%s_abilities=%d" % (
                 options.file[:file_start + 1],
                 options.file[file_start + 1:], options.num_abilities)
 
@@ -149,25 +151,37 @@ def load_data(options):
 
 
 def check_gradients_M_step():
-    options = get_cmd_line_options()
+    options = get_cmd_line_arguments()
     print >>sys.stderr, "Checking gradients.", options  # DEBUG
+
+    step_size = 1e-6
 
     model = load_data(options)
 
+    # index lookup so we know where the problem is
+    Phi_l = np.prod(model.Phi.shape)
+    J_l = np.prod(model.J.shape)
+    W_ex_cr_l = np.prod(model.W_exercise_correct.shape)
+    print "Phi %d-%d"%(0,Phi_l),"J %d-%d"%(Phi_l,Phi_l+J_l),"W_ex_cr %d-%d"%(Phi_l+J_l,Phi_l+J_l+W_ex_cr_l)
+
     theta = model.flatten_parameters()
-    theta_offset = zeros(theta.shape)
     f0, df0 = model.E_dE(theta)
     # test gradients in a random order.  This lets us run check gradients on the 
     # full size model, but still statistically test every type of gradient.
-    test_order = permute(range(theta.shape[0]))
+    test_order = range(theta.shape[0])
+    random.shuffle(test_order)
     for ind in test_order:
+        theta_offset = np.zeros(theta.shape)
+        theta_offset[ind] = step_size
         f1, df1 = model.E_dE(theta+theta_offset)
+        df_true = (f1 - f0)/step_size
 
+        print "ind", ind, "df pred", df0[ind], "df true", df_true, "df pred - df true", df0[ind] - df_true
 
-        assert()
+        assert((abs((df_true - df0[ind])/df_true) < 1e-4) or (df0[ind] == 0))
 
 def main():
-    options = get_cmd_line_options()
+    options = get_cmd_line_arguments()
     print >>sys.stderr, "Starting main.", options  # DEBUG
 
     model = load_data(options)
