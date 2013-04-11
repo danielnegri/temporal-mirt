@@ -60,7 +60,7 @@ def get_cmd_line_options():
     if options.output == '':
         # default filename
         file_start = options.file.rfind('/')
-        options.output = "%stmirt_file=%s_abilities=%d" % (
+        options.output = "output/%stmirt_file=%s_abilities=%d" % (
                 options.file[:file_start + 1],
                 options.file[file_start + 1:], options.num_abilities)
 
