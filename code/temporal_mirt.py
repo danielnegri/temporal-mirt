@@ -340,7 +340,7 @@ class TMIRT(object):
                 self.index_lookup[('exercise a', idx_exercise)].append(
                                                             self.num_times_a)
                 # store the correctness value in an array
-                self.x.append([2*r.correct-1])
+                self.x.append(r.correct)
                 self.index_lookup[('exercise x', idx_exercise)].append(
                                                             self.num_times_x)
                 self.num_times_x += 1

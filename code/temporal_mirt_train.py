@@ -96,12 +96,13 @@ def log_likelihood_AIS(user_states, couplings, options):
         log_L /= len(user_states)
         min_log_L /= len(user_states)
         # if this series doesn't converge, then you need more steps!
-        print "(%d steps) %f, %f" % (num_steps, log_L, min_log_L)
+        print "(%d steps) %f, %f" % (num_steps, log_L, min_log_L)    
 
 
-def main():
-    options = get_cmd_line_options()
-    print >>sys.stderr, "Starting main.", options  # DEBUG
+def load_data(options):
+    """
+    Create a new TMIRT model, and load it with training data.
+    """
 
     model = TMIRT(options.num_abilities)
 
@@ -109,6 +110,8 @@ def main():
     resources = []
 
     print >>sys.stderr, "loading data"
+    # loop through the data multiple times if we want multiple copies of the
+    # data in the training set
     for _ in range(options.num_replicas):
         # loop through all the training data, and create user objects
         for line in fileinput.input(options.file):
@@ -141,6 +144,33 @@ def main():
         fileinput.close()
     # create parameter structures, change datatypes, etc
     model.finalize_training_data()
+
+    return model
+
+
+def check_gradients_M_step():
+    options = get_cmd_line_options()
+    print >>sys.stderr, "Checking gradients.", options  # DEBUG
+
+    model = load_data(options)
+
+    theta = model.flatten_parameters()
+    theta_offset = zeros(theta.shape)
+    f0, df0 = model.E_dE(theta)
+    # test gradients in a random order.  This lets us run check gradients on the 
+    # full size model, but still statistically test every type of gradient.
+    test_order = permute(range(theta.shape[0]))
+    for ind in test_order:
+        f1, df1 = model.E_dE(theta+theta_offset)
+
+
+        assert()
+
+def main():
+    options = get_cmd_line_options()
+    print >>sys.stderr, "Starting main.", options  # DEBUG
+
+    model = load_data(options)
 
     # now do num_epochs EM steps
     for epoch in range(options.num_epochs):
