@@ -170,20 +170,7 @@ class TMIRT(object):
         exercise identified by idx_exercise.
         """
         # TODO(jascha) -- add 'time taken' to x and try to predict it
-
-        idx_x = self.index_lookup[('exercise x', idx_exercise)]
-        idx_a = self.index_lookup[('exercise a', idx_exercise)]
-        x = self.x[:, idx_x]
-        a = self.a[:, idx_a]
-        # add on a unit to act as a bias
-        a = np.vstack((a, np.ones((1, a.shape[1]))))
-
-        # make correctness in {-1,1}
-        x = 2*x - 1
-
-        W = self.W_exercise_correct[idx_exercise, :]
-        Wa = np.dot(W, a)
-
+        x, idx_x, a, idx_a, Wa = self.get_exercise_matrices(idx_exercise)
         E = np.log(1. + np.exp(-x*(Wa)))
 
         E = self.map_energy_abilities_to_users(E.ravel(), idx_a)
@@ -193,16 +180,7 @@ class TMIRT(object):
     def dEdW_exercise(self, idx_exercise):
         """ The derivative of the energy function, summed over all users,
         for a single exercise. """
-        idx_x = self.index_lookup[('exercise x', idx_exercise)]
-        idx_a = self.index_lookup[('exercise a', idx_exercise)]
-        x = self.x[:, idx_x]
-        a = self.a[:, idx_a]
-        # add on a unit to act as a bias
-        a = np.vstack((a, np.ones((1, a.shape[1]))))
-        # make correctness in {-1,1}
-        x = 2*x - 1
-        W = self.W_exercise_correct[idx_exercise, :]
-        Wa = np.dot(W, a)
+        x, idx_x, a, idx_a, Wa = self.get_exercise_matrices(idx_exercise)
         expxWa = np.exp(-x*(Wa))
         term1 = (-1./(1. + expxWa)*expxWa*x)
         dEdW = np.dot(term1, a.T)
@@ -213,49 +191,50 @@ class TMIRT(object):
         the energy contribution from the resource identified by "idx_resource",
         returned per user
         """
-        # get the pre and post abilities matrices that correspond to this
-        # resource
-        idx_pre = self.index_lookup[('a pre resource', idx_resource)]
-        idx_post = self.index_lookup[('a post resource', idx_resource)]
-        a_pre = self.a[:, idx_pre]
-        a_post = self.a[:, idx_post]
-        # add on a unit to act as a bias
-        a_pre = np.vstack((a_pre, np.ones((1, a_pre.shape[1]))))
-        # get the parameters for this resource
-        Phi = self.Phi[:, :, idx_resource]
-        J = self.J[:, :, idx_resource]
-        # do the actual computation
-        a_predicted = a_pre[:-1, :] + np.dot(Phi, a_pre)
-        a_err = a_post - a_predicted
+        idx_pre, idx_post, a_pre, a_post, a_err, J = \
+                self. get_abilities_matrices(idx_resource)
 
         E = 0.5 * np.sum(a_err*np.dot(J, a_err), axis=0)
         # DEBUG check sign
         # Gaussian normalization term
-        E += -np.sum(np.log(np.linalg.eig(J)[0])) #*idx_pre.shape[0]
+        E += -np.sum(np.log(np.linalg.eig(J)[0]))  # *idx_pre.shape[0]
 
         E = self.map_energy_abilities_to_users(E, idx_pre)
 
         return E
 
     def dEdPhi_resource(self, idx_resource):
-        # get the pre and post abilities matrices that correspond to this
-        # resource
-        idx_pre = self.index_lookup[('a pre resource', idx_resource)]
-        idx_post = self.index_lookup[('a post resource', idx_resource)]
-        a_pre = self.a[:, idx_pre]
-        a_post = self.a[:, idx_post]
-        # add on a unit to act as a bias
-        a_pre = np.vstack((a_pre, np.ones((1, a_pre.shape[1]))))
-        # get the parameters for this resource
-        Phi = self.Phi[:, :, idx_resource]
-        J = self.J[:, :, idx_resource]
-        # do the actual computation
-        a_predicted = a_pre[:-1, :] + np.dot(Phi, a_pre)
-        a_err = a_post - a_predicted
+        idx_pre, idx_post, a_pre, a_post, a_err, J = \
+                self. get_abilities_matrices(idx_resource)
+
         dEdPhi = -np.dot(np.dot(J, a_err), a_pre.T)
         return dEdPhi
 
     def dEdJ_resource(self, idx_resource):
+        idx_pre, idx_post, a_pre, a_post, a_err, J = \
+                self. get_abilities_matrices(idx_resource)
+
+        dEdJ = 0.5*np.dot(a_err, a_err.T)
+        dEdJ += -np.linalg.inv(J.T)*idx_pre.shape[0]
+
+        return dEdJ
+
+    def get_exercise_matrices(self, idx_exercise):
+        idx_x = self.index_lookup[('exercise x', idx_exercise)]
+        idx_a = self.index_lookup[('exercise a', idx_exercise)]
+        x = self.x[:, idx_x]
+        a = self.a[:, idx_a]
+        # add on a unit to act as a bias
+        a = np.vstack((a, np.ones((1, a.shape[1]))))
+
+        # make correctness in {-1,1}
+        x = 2*x - 1
+
+        W = self.W_exercise_correct[idx_exercise, :]
+        Wa = np.dot(W, a)
+        return x, idx_x, a, idx_a, Wa
+
+    def get_abilities_matrices(self, idx_resource):
         # get the pre and post abilities matrices that correspond to this
         # resource
         idx_pre = self.index_lookup[('a pre resource', idx_resource)]
@@ -270,11 +249,7 @@ class TMIRT(object):
         # do the actual computation
         a_predicted = a_pre[:-1, :] + np.dot(Phi, a_pre)
         a_err = a_post - a_predicted
-        
-        dEdJ = 0.5*np.dot(a_err, a_err.T)
-        dEdJ += -np.linalg.inv(J.T)*idx_pre.shape[0]
-
-        return dEdJ
+        return idx_pre, idx_post, a_pre, a_post, a_err, J
 
     def E(self, a=None):
         """
@@ -417,10 +392,10 @@ class TMIRT(object):
 
             #assert np.isfinite(E_proposed), "non-finite proposal energy"
 
-            pcmp = np.random.rand(p_accept.shape[0],1).reshape(p_accept.shape)
+            pcmp = np.random.rand(p_accept.shape[0], 1).reshape(p_accept.shape)
             update_idx = np.nonzero(p_accept > pcmp)[0]
-            self.a[:,update_idx] = a_proposed[:,update_idx]
-            E_current[:,update_idx] = E_proposed[:,update_idx]
+            self.a[:, update_idx] = a_proposed[:, update_idx]
+            E_current[:, update_idx] = E_proposed[:, update_idx]
 
         return E_current
 
