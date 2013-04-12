@@ -231,7 +231,7 @@ def main():
         new_theta, L, _ = scipy.optimize.fmin_l_bfgs_b(
             model.E_dE,
             old_theta.copy().ravel(),
-            disp=1,
+            disp=0,
             maxfun=options.max_pass_lbfgs, m=100)
         model.unflatten_parameters(new_theta)
 

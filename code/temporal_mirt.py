@@ -1,6 +1,7 @@
 import numpy as np
 import accuracy_model_util as acc_util
 from collections import defaultdict
+import sys
 
 
 class TMIRTResource(object):
@@ -147,12 +148,12 @@ class TMIRT(object):
         # same indexing array on the left side of the assignment
         # (remembering that idx_pre is sorted)
         # DEBUG
-        for ii in range(E_sub.shape[0]):
-            E[self.a_to_user[idx_pre[ii]]] \
-                        += E_sub[ii]
-        #for ii in range(self.longest_user):
-        #    E[self.a_to_user[idx_pre[ii::self.longest_user]]] \
-        #                += E_sub[ii::self.longest_user]
+        #for ii in range(E_sub.shape[0]):
+        #    E[self.a_to_user[idx_pre[ii]]] \
+        #                += E_sub[ii]
+        for ii in range(self.longest_user):
+            E[self.a_to_user[idx_pre[ii::self.longest_user]]] \
+                        += E_sub[ii::self.longest_user]
 
         return E
 
@@ -320,7 +321,7 @@ class TMIRT(object):
 
         dE = np.concatenate((dPhi.flat, dJ.flat, dW_exercise_correct.flat))
 
-        return E, dE
+        return E/self.num_users, dE/self.num_users
 
     def increment_num_times(self, num_users):
         self.num_times_a += 1
@@ -386,7 +387,7 @@ class TMIRT(object):
                              self.num_abilities + 1, self.num_resources))
         self.J = np.tile(np.eye(self.num_abilities).reshape(
                                 (self.num_abilities, self.num_abilities, 1)),
-                                (1, 1, self.num_resources)) * 100
+                                (1, 1, self.num_resources)) * 10
         self.W_exercise_correct = np.zeros((self.num_exercises,
                                     self.num_abilities + 1))
         self.W_exercise_logtime = np.zeros((self.num_exercises,
@@ -415,6 +416,9 @@ class TMIRT(object):
             # probability of accepting proposal
             p_accept = np.exp(E_current - E_proposed)
 
+            if np.mean(p_accept) < 0.1:
+                print >>sys.stderr, "low sampling accept rate mean", np.mean(p_accept), "by sample", p_accept
+                
             #assert np.isfinite(E_proposed), "non-finite proposal energy"
 
             pcmp = np.random.rand(p_accept.shape[0],1).reshape(p_accept.shape)
