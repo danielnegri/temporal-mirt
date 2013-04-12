@@ -150,10 +150,16 @@ def load_data(options):
     return model
 
 
+def check_gradients_E_step():
+    # TODO(jascha) calculate gradients w.r.t. a, use to sample more efficiently
+    pass
+
+
+
 # TODO -- numerical precision is worse than expected.  Make sure is using float64.
 def check_gradients_M_step():
     options = get_cmd_line_arguments()
-    print >>sys.stderr, "Checking gradients.", options  # DEBUG
+    print >>sys.stderr, "Checking gradients M step.", options  # DEBUG
 
     step_size = 1e-6
 
