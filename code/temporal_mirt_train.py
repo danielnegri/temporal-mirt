@@ -217,8 +217,8 @@ def main():
             num_steps=options.sampling_num_steps,
             epsilon=options.sampling_epsilon)
 
-        print >>sys.stderr, "E joint log L + const %f, " % (
-                np.mean(E_samples) / np.log(2.)),
+        print >>sys.stderr, "E log L %f, " % (
+                -np.sum(E_samples)/ model.num_users / np.log(2.)),
 
         # debugging info -- accumulate mean and covariance of abilities vector
         mn_a = np.mean(model.a, axis=1)
@@ -236,7 +236,7 @@ def main():
         model.unflatten_parameters(new_theta)
 
         # Print debuggin info on the progress of the training
-        print >>sys.stderr, "M conditional log L %f, " % (-L),
+        print >>sys.stderr, "M log L %f, " % (-L/np.log(2)),
         print >>sys.stderr, "||theta|| %f, " % (
                 np.sqrt(np.sum(new_theta ** 2))),
         print >>sys.stderr, "||dtheta|| %f" % (
