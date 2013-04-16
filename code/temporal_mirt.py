@@ -9,10 +9,18 @@ class TMIRTResource(object):
     Holds information on a single resource for the temporal mirt model.
     """
     def __init__(self, row):
-        # used to index the fields with a line of text in the input data file
         idx_pl = acc_util.FieldIndexer(acc_util.FieldIndexer.plog_fields)
+        # used to index the fields with a line of text in the input data file
         if row[idx_pl.rowtype] == 'problemlog':
+            idx_pl = acc_util.FieldIndexer(acc_util.FieldIndexer.plog_fields)
             self.correct = row[idx_pl.correct]
+            self.time_done = row[idx_pl.time_done]
+            self.time_taken = row[idx_pl.time_taken]
+            self.name = row[idx_pl.exercise]
+            self.type = 'exercise'
+        else:  # row[idx_pl.rowtype] == 'exercise':
+            idx_pl = acc_util.FieldIndexer(acc_util.FieldIndexer.vplog_fields)
+            self.correct = 1 if row[idx_pl.correct] == 'True' else 0
             self.time_done = row[idx_pl.time_done]
             self.time_taken = row[idx_pl.time_taken]
             self.name = row[idx_pl.exercise]
@@ -221,6 +229,8 @@ class TMIRT(object):
         return dEdJ
 
     def get_exercise_matrices(self, idx_exercise):
+        # TODO (eliana): This fails when there's only one example of a given
+        # exercise so it's never pre or something
         idx_x = self.index_lookup[('exercise x', idx_exercise)]
         idx_a = self.index_lookup[('exercise a', idx_exercise)]
         x = self.x[:, idx_x]
@@ -238,6 +248,7 @@ class TMIRT(object):
     def get_abilities_matrices(self, idx_resource):
         # get the pre and post abilities matrices that correspond to this
         # resource
+
         idx_pre = self.index_lookup[('a pre resource', idx_resource)]
         idx_post = self.index_lookup[('a post resource', idx_resource)]
         a_pre = self.a[:, idx_pre]
@@ -315,6 +326,7 @@ class TMIRT(object):
         self.index_lookup['chain start'].append(self.num_times_a)
 
         for r in resources:
+
             idx_resource = self.get_resource_index(r)
             self.index_lookup[('a pre resource', idx_resource)].append(
                                                         self.num_times_a)
@@ -412,7 +424,7 @@ class TMIRT(object):
 
             if np.mean(p_accept) < 0.1:
                 print >>sys.stderr, "low sampling accept rate mean", np.mean(p_accept), "by sample", p_accept
-                
+
             #assert np.isfinite(E_proposed), "non-finite proposal energy"
 
             pcmp = np.random.rand(p_accept.shape[0], 1).reshape(p_accept.shape)
@@ -421,53 +433,3 @@ class TMIRT(object):
             E_current[:, update_idx] = E_proposed[:, update_idx]
 
         return E_current
-
-"""
-    def logL_AIS(self, num_steps=1e3, epsilon=None):
-        ""
-        Calculate the joint log probability of the training data, using AIS
-
-        NOT YET IMPLEMENTED.  This is just cut and paste from the mirt code.
-        ""
-
-        # initialize abilities using prior
-        abilities = np.random.randn(num_abilities, 1)
-
-        # the prior and joint energy function at this location
-        E0n = 0.5 * np.sum(abilities**2) - num_abilities/2. * np.log(2.*np.pi)
-        ENn = (0.5 * np.sum(abilities**2) - num_abilities/2. * np.log(2.*np.pi) +
-               np.sum(-np.log(mirt_util.conditional_probability_observed(
-                        abilities, couplings,
-                        exercises_ind, correct))))
-
-        # initialize the weights
-        logw = E0n
-        for n in range(1,num_steps):
-            mix_frac1 = float(n+1)/num_steps
-            mix_frac0 = 1.-mix_frac1
-            Elast = mix_frac0*E0n  + mix_frac1*ENn;
-
-            # update the sample and the energy
-            abilities = mirt_util.sample_abilities_diffusion(
-                couplings, exercises_ind, correct,
-                abilities_init=abilities, num_steps=1,
-                sampling_epsilon=sampling_epsilon,
-                conditional_weight=mix_frac1)[0]
-
-            # the prior and joint energy function at this location
-            E0n = 0.5 * np.sum(abilities**2) - num_abilities/2. * np.log(2.*np.pi)
-            ENn = (0.5 * np.sum(abilities**2) - num_abilities/2. * np.log(2.*np.pi) +
-                   np.sum(-np.log(mirt_util.conditional_probability_observed(
-                            abilities, couplings,
-                            exercises_ind, correct))))
-
-            Enew = mix_frac0*E0n  + mix_frac1*ENn
-
-            # accumulate the change in log probability from this intermediate
-            # distribution
-            logw += Enew - Elast
-
-        logw -= ENn
-
-        return logw
-        """

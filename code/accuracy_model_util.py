@@ -4,6 +4,15 @@ import re
 linesplit = re.compile('[,\t\x01]')
 
 
+def get_FieldIndexer(typename):
+    if typename == 'topic':
+        return FieldIndexer(FieldIndexer.topic_attempt_fields)
+    if typename == 'vplog':
+        return FieldIndexer(FieldIndexer.vplog_fields)
+    if typename == 'plog':
+        return FieldIndexer(FieldIndexer.plog_fields)
+
+
 class FieldIndexer:
     def __init__(self, field_names):
         for i, field in enumerate(field_names):
@@ -17,6 +26,15 @@ class FieldIndexer:
             'seed', 'time_taken', 'problem_number', 'correct',
             'number_attempts', 'number_hints', 'eventually_correct',
             'topic_mode', 'dt']
+
+    vplog_fields = ['user',
+                    'time_done',       # datetime in seconds
+                    'rowtype',         # video or exercise
+                    "time_taken",      # how long watched/to solve
+                    "problem_number",  # (final second for video)
+                    "correct",         # completed means correct or finished,
+                    "exercise"]        # really name but like this for now for
+                                       # the sake of minimal refactoring
 
 
 def sequential_problem_numbers(attempts, idx):
@@ -43,8 +61,8 @@ def sequential_problem_numbers(attempts, idx):
 
 
 def valid_history(attempts, idx):
-    if not sequential_problem_numbers(attempts, idx):
+    #if not sequential_problem_numbers(attempts, idx):
         #print >>sys.stderr, "Invalid History: Non-sequential problem numbers."
-        return False
-
+    #    return False
+    print "ACCEPTING A HISTORY"
     return True

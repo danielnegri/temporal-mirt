@@ -16,8 +16,6 @@ from temporal_mirt import TMIRT, TMIRTResource
 
 # used to index the fields in with a line of text in the input data file
 linesplit = acc_util.linesplit
-idx_pl = acc_util.FieldIndexer(acc_util.FieldIndexer.plog_fields)
-
 
 def get_cmd_line_arguments():
     parser = argparse.ArgumentParser(description="Train a temporal multi-dimensional item response theory (TMIRT) model.")
@@ -57,6 +55,9 @@ def get_cmd_line_arguments():
     # the root filename for output
     parser.add_argument("-o", "--output", type=str, default='')
     # DEBUG use parse_known_args rather than parse_args so can easily run it inside pylab
+    parser.add_argument("-i", "--indexer", type=str, default='plog',
+        help="This defines the model that you'll use to parse the data\
+        (look in accuracy_model_util for examples")
     options, _ = parser.parse_known_args()
 
     if options.output == '':
@@ -98,7 +99,7 @@ def log_likelihood_AIS(user_states, couplings, options):
         log_L /= len(user_states)
         min_log_L /= len(user_states)
         # if this series doesn't converge, then you need more steps!
-        print "(%d steps) %f, %f" % (num_steps, log_L, min_log_L)    
+        print "(%d steps) %f, %f" % (num_steps, log_L, min_log_L)
 
 
 def load_data(options):
@@ -110,6 +111,8 @@ def load_data(options):
 
     prev_user = None
     resources = []
+
+    idx_pl = acc_util.get_FieldIndexer(options.indexer)
 
     print >>sys.stderr, "loading data"
     # loop through the data multiple times if we want multiple copies of the
@@ -173,7 +176,7 @@ def check_gradients_M_step():
 
     theta = model.flatten_parameters()
     f0, df0 = model.E_dE(theta)
-    # test gradients in a random order.  This lets us run check gradients on the 
+    # test gradients in a random order.  This lets us run check gradients on the
     # full size model, but still statistically test every type of gradient.
     test_order = range(theta.shape[0])
     random.shuffle(test_order)
@@ -197,8 +200,10 @@ def check_gradients_M_step():
 
         print "ind", ind, "df pred", df0[ind], "df true", df_true, "df pred - df true", df0[ind] - df_true
 
+
 def main():
     options = get_cmd_line_arguments()
+
     print >>sys.stderr, "Starting main.", options  # DEBUG
 
     model = load_data(options)
@@ -210,15 +215,13 @@ def main():
         # Expectation step
         # Compute (and print) the energies during learning as a diagnostic.
         # These should decrease.
-        # TODO (eliana) THis isn't used - should it be?
-        Eavg = 0.
 
         E_samples = model.sample_abilities_diffusion(
             num_steps=options.sampling_num_steps,
             epsilon=options.sampling_epsilon)
 
         print >>sys.stderr, "E log L %f, " % (
-                -np.sum(E_samples)/ model.num_users / np.log(2.)),
+                -np.sum(E_samples) / model.num_users / np.log(2.)),
 
         # debugging info -- accumulate mean and covariance of abilities vector
         mn_a = np.mean(model.a, axis=1)
@@ -253,6 +256,7 @@ def main():
             f1 = open("%s_exercise_epoch=%d.csv" %
                     (options.output, epoch), 'w+')
             couplings = model.W_exercise_correct
+
             exercise_ind_dict = model.exercise_index
             tt = [(couplings[exercise_ind_dict[nm], :-1],
                    couplings[exercise_ind_dict[nm], -1], nm)
