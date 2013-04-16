@@ -368,6 +368,25 @@ class TMIRT(object):
         self.W_exercise_logtime = np.zeros((self.num_exercises,
                                     self.num_abilities + 1))
 
+
+    def build_full_couplings(self):
+        for idx_resource in range(self.num_resources):
+            idx_pre, idx_post, a_pre, a_post, a_err, J = \
+                self. get_abilities_matrices(idx_resource)
+            Phi = self.Phi[:, :, idx_resource]
+            Jpre = dot(phi_m.T, np.dot(J, phi_m))
+            Jcross = dot(J, phi_m)
+            # note the broadcasting rules.  If tensors have different numbers 
+            # of dimensions, then they are right aligned.
+            self.full_J[idx_post,idx_post,:,:] += J
+            self.full_J[idx_pre,idx_pre,:,:] += Jpre
+            self.full_J[idx_post,idx_pre,:,:] += Jcross
+            self.full_J[idx_pre,idx_post,:,:] += Jcross.T
+            self.full_bias[idx_post,:] += dot(J, phi_b)
+            self.full_bias[idx_pre,:] += dot(dot(J, phi_b))
+        
+
+ 
     def sample_abilities_diffusion(self, num_steps=1e4, epsilon=None):
 
         if epsilon is None:
