@@ -139,7 +139,7 @@ def load_data(options):
                 row[idx_pl.number_attempts] = int(row[idx_pl.number_attempts])
                 row[idx_pl.number_hints] = int(row[idx_pl.number_hints])
                 row[idx_pl.time_taken] = float(row[idx_pl.time_taken])
-            resources.append(TMIRTResource(row))
+            resources.append(TMIRTResource(row, idx_pl))
 
         if len(resources) > 0:
             # flush the data for the final user, too
