@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import sparse
 import accuracy_model_util as acc_util
 from collections import defaultdict
 import sys
@@ -113,7 +114,7 @@ class TMIRT(object):
         #return np.concatenate((self.Phi.flat, self.J.flat,
         #    self.W_exercise_correct.flat, self.W_exercise_logtime.flat))
         return np.concatenate((self.Phi.flat, self.J.flat,
-                                self.W_exercise_correct.flat))
+                            self.W_exercise_correct.flat))
 
     def unflatten_parameters(self, theta):
         theta = self.pop_parameter(theta, self.Phi)
@@ -144,25 +145,24 @@ class TMIRT(object):
         reasonable sampling step size the answer would be none of them.)
         """
 
+        E = np.zeros((self.num_users))
+
         # we can't do this directly, because Python indexing doesn't handle
         # incrementing the way we would like when the same index occurs
         # multiple times
         #E[idx_pre] += E_sub
 
-        # TODO(jascha) There's probably a more efficient way to do this
-
-        E = np.zeros((self.num_users))
         # set the stride long enough the same index never occurs twice in the
         # same indexing array on the left side of the assignment
         # (remembering that idx_pre is sorted)
+        for ii in range(self.longest_user):
+            E[self.a_to_user[idx_pre[ii::self.longest_user]]] \
+                += E_sub[ii::self.longest_user]
+
         # DEBUG
         #for ii in range(E_sub.shape[0]):
         #    E[self.a_to_user[idx_pre[ii]]] \
         #                += E_sub[ii]
-        for ii in range(self.longest_user):
-            E[self.a_to_user[idx_pre[ii::self.longest_user]]] \
-                        += E_sub[ii::self.longest_user]
-
         return E
 
     def E_chain_start(self):
@@ -201,7 +201,7 @@ class TMIRT(object):
         returned per user
         """
         idx_pre, idx_post, a_pre, a_post, a_err, J = \
-                self. get_abilities_matrices(idx_resource)
+            self.get_abilities_matrices(idx_resource)
 
         E = 0.5 * np.sum(a_err*np.dot(J, a_err), axis=0)
         # DEBUG check sign
@@ -214,14 +214,14 @@ class TMIRT(object):
 
     def dEdPhi_resource(self, idx_resource):
         idx_pre, idx_post, a_pre, a_post, a_err, J = \
-                self. get_abilities_matrices(idx_resource)
+                self.get_abilities_matrices(idx_resource)
 
         dEdPhi = -np.dot(np.dot(J, a_err), a_pre.T)
         return dEdPhi
 
     def dEdJ_resource(self, idx_resource):
         idx_pre, idx_post, a_pre, a_post, a_err, J = \
-                self. get_abilities_matrices(idx_resource)
+                self.get_abilities_matrices(idx_resource)
 
         dEdJ = 0.5*np.dot(a_err, a_err.T)
         dEdJ += -np.linalg.inv(J.T)*idx_pre.shape[0]
@@ -381,22 +381,82 @@ class TMIRT(object):
                                     self.num_abilities + 1))
 
 
-    def build_full_couplings(self):
+    def invsqrtm(self, W):
+        """
+        Numpy/scipy only has limited support for sparse matrices, so we're
+        rolling our own function for matrix^(-1/2), using the Taylor
+        expansion.
+        If we weren't scaling by "mn" below, this would only be valid if all the
+        eigenvalues of W had magnitude less than 1.  With the scaling, we need
+        all the eigenvalues of W/mn to have magnitude less than 1.
+        """
+
+        import scipy.special
+
+        # number of terms to use in the Taylor series.  increase to get a more
+        # accurate approximation.
+        nterms = 10
+
+        # DEBUG experiment with different sparse matrix types.  eg, make sure these aren't LIL, which is slower.
+
+        # A will accumulate the output
+        A = scipy.special.binom(-0.5, 0)*scipy.sparse.eye(W.shape[0], W.shape[1])
+        # B will accumulate the powers of (W-I)
+        B = scipy.sparse.eye(W.shape[0], W.shape[1])
+
+        # the closer W is to the identity, the faster this converges,
+        # so scale W so it is closer to the identity, and then apply
+        # the corresponding scaling to the inverse
+        ind = W.shape[0]
+        dg = W[ind, ind]
+        mn = np.mean(dg)
+        W = W/mn
+
+        # the terms in the series are (W-I), not W
+        W = W - scipy.sparse.eye(W.shape[0], W.shape[1])
+        # accumulate terms in the Taylor series
+        for i in range(nterms)+1:
+            coeff = scipy.special.binom(-0.5, i)
+            B = W.dot(B)
+            A += coeff*B
+
+        # scale the inverse of W to match the scaling of W above
+        A /= mn
+
+        return A
+
+
+    def get_joint_gaussian_sample_matrices(self):
+        # full ability to ability coupling matrix
+        full_J = sparse.lil_matrix(
+                (self.num_times_a,self.num_abilities,self.num_times_a,self.num_abilities))
+        # full abilities bias vector
+        full_bias = sparse.lil_matrix((self.num_times_a,self.num_abilities))
+
+        # accumulate terms in the coupling matrix and bias vector for all resources
         for idx_resource in range(self.num_resources):
             idx_pre, idx_post, a_pre, a_post, a_err, J = \
-                self. get_abilities_matrices(idx_resource)
+                self.get_abilities_matrices(idx_resource)
             Phi = self.Phi[:, :, idx_resource]
             Jpre = dot(phi_m.T, np.dot(J, phi_m))
             Jcross = dot(J, phi_m)
-            # note the broadcasting rules.  If tensors have different numbers 
-            # of dimensions, then they are right aligned.
-            self.full_J[idx_post,idx_post,:,:] += J
-            self.full_J[idx_pre,idx_pre,:,:] += Jpre
-            self.full_J[idx_post,idx_pre,:,:] += Jcross
-            self.full_J[idx_pre,idx_post,:,:] += Jcross.T
-            self.full_bias[idx_post,:] += dot(J, phi_b)
-            self.full_bias[idx_pre,:] += dot(dot(J, phi_b))
-        
+
+            full_J[idx_post,:,idx_post,:] += J.reshape((1,self.num_abilities,1,self.num_abilities))
+            full_J[idx_pre,:,idx_pre,:] += Jpre.reshape((1,self.num_abilities,1,self.num_abilities))
+            full_J[idx_post,:,idx_pre,:] += Jcross.reshape((1,self.num_abilities,1,self.num_abilities))
+            full_J[idx_pre,:,idx_post,:] += Jcross.T.reshape((1,self.num_abilities,1,self.num_abilities))
+            # DEBUG check for factor of 2
+            full_bias[idx_post,:] += dot(J, phi_b)
+            full_bias[idx_pre,:] += dot(phi_m.T, dot(J, phi_b))
+
+        W = invsqrtm(full_J)
+        full_bias = W.dot(W.dot(full_bias))
+        return W, full_bias
+
+
+    def sample_abilities_joint_gaussian(self):
+
+        # TODO include the exercises in the coupling and bias terms
 
  
     def sample_abilities_diffusion(self, num_steps=1e4, epsilon=None):
