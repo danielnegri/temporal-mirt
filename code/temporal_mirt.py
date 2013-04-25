@@ -131,10 +131,7 @@ class TMIRT(object):
     def map_energy_abilities_to_users(self, E_sub, idx_pre):
         """
         takes an input with a contribution to the energy for each column in the
-        a matrix (note, adjacent columns in a will be coupled, and that
-        coupling energy is only assigned to one of the columns, so it's
-        dangerous to think of the input energy corresponding to a single column
-        of a).
+        a matrix.
 
         outputs an energy for each user by summing over the columns for that
         user.
@@ -207,6 +204,11 @@ class TMIRT(object):
         # DEBUG check sign
         # Gaussian normalization term
         E += -np.sum(np.log(np.linalg.eig(J)[0]))  # *idx_pre.shape[0]
+
+        # NOTE adjacent columns in a are coupled, and that
+        # coupling energy is only assigned to one of the columns, so it's
+        # dangerous to think of the energy here as corresponding to a single column
+        # of a
 
         E = self.map_energy_abilities_to_users(E, idx_pre)
 
@@ -395,9 +397,11 @@ class TMIRT(object):
 
         # number of terms to use in the Taylor series.  increase to get a more
         # accurate approximation.
-        nterms = 10
+        # DEBUG -- this is purely heuristic!
+        nterms = self.longest_user*10
 
-        # DEBUG experiment with different sparse matrix types.  eg, make sure these aren't LIL, which is slower.
+        # DEBUG experiment with different sparse matrix types.
+        # eg, make sure these aren't LIL, which is slower.
 
         # A will accumulate the output
         A = scipy.special.binom(-0.5, 0)*scipy.sparse.eye(W.shape[0], W.shape[1])
@@ -420,8 +424,9 @@ class TMIRT(object):
             B = W.dot(B)
             A += coeff*B
 
-        # scale the inverse of W to match the scaling of W above
-        A /= mn
+        # scale the square root of the inverse of W to match the scaling of W
+        # above
+        A /= np.sqrt(mn)
 
         return A
 
@@ -429,9 +434,9 @@ class TMIRT(object):
     def get_joint_gaussian_sample_matrices(self):
         # full ability to ability coupling matrix
         full_J = sparse.lil_matrix(
-                (self.num_times_a,self.num_abilities,self.num_times_a,self.num_abilities))
+           (self.num_times_a, self.num_abilities, self.num_times_a, self.num_abilities))
         # full abilities bias vector
-        full_bias = sparse.lil_matrix((self.num_times_a,self.num_abilities))
+        full_bias = sparse.lil_matrix((self.num_times_a, self.num_abilities))
 
         # accumulate terms in the coupling matrix and bias vector for all resources
         for idx_resource in range(self.num_resources):
@@ -441,20 +446,29 @@ class TMIRT(object):
             Jpre = dot(phi_m.T, np.dot(J, phi_m))
             Jcross = dot(J, phi_m)
 
-            full_J[idx_post,:,idx_post,:] += J.reshape((1,self.num_abilities,1,self.num_abilities))
-            full_J[idx_pre,:,idx_pre,:] += Jpre.reshape((1,self.num_abilities,1,self.num_abilities))
-            full_J[idx_post,:,idx_pre,:] += Jcross.reshape((1,self.num_abilities,1,self.num_abilities))
+            full_J[idx_post, :, idx_post,:] += J.reshape((1,self.num_abilities,1,self.num_abilities))
+            full_J[idx_pre, :, idx_pre,:] += Jpre.reshape((1,self.num_abilities,1,self.num_abilities))
+            full_J[idx_post, :, idx_pre,:] += Jcross.reshape((1,self.num_abilities,1,self.num_abilities))
             full_J[idx_pre,:,idx_post,:] += Jcross.T.reshape((1,self.num_abilities,1,self.num_abilities))
             # DEBUG check for factor of 2
             full_bias[idx_post,:] += dot(J, phi_b)
             full_bias[idx_pre,:] += dot(phi_m.T, dot(J, phi_b))
 
         W = invsqrtm(full_J)
+        # DEBUG(jascha) haven't checked this bias is correct, but not yet using it 
+        # for anything.
         full_bias = W.dot(W.dot(full_bias))
         return W, full_bias
 
 
-    def sample_abilities_joint_gaussian(self):
+    def sample_abilities_joint_gaussian(self, num_steps=1e3):
+
+        W, _ = self.get_joint_gaussian_sample_matrices()
+
+        # calculate the energy for the initialization state
+        # the ratio of the Gaussian energy and the Gaussian energy
+        # for the proposal distribution will be 1
+        E_current = self.E()
 
         # TODO include the exercises in the coupling and bias terms
 
