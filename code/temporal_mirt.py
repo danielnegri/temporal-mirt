@@ -1,5 +1,6 @@
 import numpy as np
 from scipy import sparse
+import scipy.special
 import accuracy_model_util as acc_util
 from collections import defaultdict
 import sys
@@ -73,9 +74,17 @@ class HMC(object):
         self.beta = beta
         self.v = np.random.randn(model.a.shape[0], model.a.shape[1])
         self.E, self.dE = model.E_dE_abilities()
+        self.calc_Ev()
+
+
+    def calc_Ev(self):
+        """ calculate the momentum contribution to the energy """
+        idx_pre = np.asarray(range(self.v.shape[1]))
+        self.Ev = self.model.map_energy_abilities_to_users(0.5 * self.v**2, idx_pre)
 
 
     def leapfrog(self):
+        """ integrate leapfrog dynamics for self.L steps """
         a_shape = self.model.a.shape
 
         for _ in range(self.L):
@@ -91,12 +100,11 @@ class HMC(object):
         self.v = -self.v
 
         # add the momentum terms to the energy
-        idx_pre = np.asarray(range(self.v.shape[1]))
-        Emom = self.model.map_energy_abilities_to_users(0.5 * self.v**2, idx_pre)
-        self.E += Emom
+        self.calc_Ev()
 
 
     def sample(self, N=1):
+        """ run N steps of Hamiltonian Monte Carlo sampling """
         for _ in range(N):
             Sinit = self.state(self)
             self.leapfrog()
@@ -108,6 +116,9 @@ class HMC(object):
             Sinit.apply_state(bd)
             # flip the momentum
             self.v = -self.v
+
+            # corrupt the momentum with noise
+            # update the momentum contribution to the energy
 
 
 class TMIRT(object):
@@ -475,8 +486,6 @@ class TMIRT(object):
         all the eigenvalues of W/mn to have magnitude less than 1.
         """
 
-        import scipy.special
-
         # number of terms to use in the Taylor series.  increase to get a more
         # accurate approximation.
         # DEBUG -- this is purely heuristic!
@@ -528,11 +537,11 @@ class TMIRT(object):
             Jpre = dot(phi_m.T, np.dot(J, phi_m))
             Jcross = dot(J, phi_m)
 
-            # DEBUG this is horribly inefficient!  some kind of wrapper for N-d sparse
-            # matrices?  Expanding the idx arrays?
+            # TODO these loops are horribly inefficient!  some kind of wrapper for
+            # N-d sparse matrices?  Expanding the idx arrays?
             for ai in range(self.num_abilities):
                 for aj in range(self.num_abilities):
-                    # python defaults to row major
+                    # python defaults to row major indexing
                     full_J[idx_post + self.num_times_a+ai, idx_post + self.num_times_a+aj] += J[ai,aj]
                     full_J[idx_pre + self.num_times_a+ai, idx_pre + self.num_times_a+aj] += Jpre[ai,aj]
                     full_J[idx_post + self.num_times_a+ai, idx_pre + self.num_times_a+aj] += Jcross[ai,aj]
@@ -540,6 +549,9 @@ class TMIRT(object):
             # DEBUG check for factor of 2
             full_bias[idx_post,:] += dot(J, phi_b)
             full_bias[idx_pre,:] += dot(phi_m.T, dot(J, phi_b))
+
+        # TODO convert from LIL to ?
+
 
         W = invsqrtm(full_J)
         # DEBUG(jascha) haven't checked this bias is correct, but not yet using it 
@@ -550,23 +562,12 @@ class TMIRT(object):
 
     def sample_abilities_HMC_natgrad(self,num_steps=1e3,epsilon=0.1,L=10,beta=0.5):
 
-        # we will scale our dynamics by W
+        # we will scale our dynamics by W (add ref)
         W, _ = self.get_joint_gaussian_covariance_bias()
+        W *= epsilon
 
-        sampler = HMC()
-
-
-
-    def sample_abilities_joint_gaussian(self, num_steps=1e3):
-
-        W, _ = self.get_joint_gaussian_sample_matrices()
-
-        # calculate the energy for the initialization state
-        # the ratio of the Gaussian energy and the Gaussian energy
-        # for the proposal distribution will be 1
-        E_current = self.E()
-
-        # TODO include the exercises in the coupling and bias terms
+        sampler = HMC(self, epsilon=W, L=L, beta=beta)
+        sampler.sample(N=num_steps)
 
  
     def sample_abilities_diffusion(self, num_steps=1e4, epsilon=None):
