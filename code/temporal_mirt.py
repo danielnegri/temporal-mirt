@@ -36,6 +36,8 @@ class HMC(object):
     some interesting properties.  Samples should be accepted or rejected
     per-user, but the variables should be stored per time-slice, so the
     sampler needs to be aware of the user <-> time slice mapping.
+    Additionally, we want to use the sparse scaling matrix epsilon
+    to hide the joint Gaussian covariance structure.
     """
 
     class state():
@@ -285,6 +287,15 @@ class TMIRT(object):
         dEdW = np.dot(term1, a.T)
         return dEdW
 
+    def dEda_accumulate_exercise(self, idx_exercise, da):
+        """ The derivative of the energy function in terms of a,
+        for all users, for a single exercise. """
+        x, idx_x, a, idx_a, Wa = self.get_exercise_matrices(idx_exercise)
+        W = self.W_exercise_correct[idx_exercise, :]
+        expxWa = np.exp(-x*(Wa))
+        term1 = (-1./(1. + expxWa)*expxWa*x)
+        da[:,idx_a] += np.dot(W.T, term1)
+
     def E_resource(self, idx_resource):
         """
         the energy contribution from the resource identified by "idx_resource",
@@ -306,6 +317,15 @@ class TMIRT(object):
         E = self.map_energy_abilities_to_users(E, idx_pre)
 
         return E
+
+
+    def dEda_accumulate_resource(self, idx_resource, da):
+        idx_pre, idx_post, a_pre, a_post, a_err, J = \
+                self.get_abilities_matrices(idx_resource)
+        Phi = self.Phi[:, :, idx_resource]
+
+        da[:,idx_pre] += -np.dot(Phi.T, np.dot(J, a_err))
+        da[:,idx_post] += np.dot(J, a_err)
 
     def dEdPhi_resource(self, idx_resource):
         idx_pre, idx_post, a_pre, a_post, a_err, J = \
@@ -378,6 +398,24 @@ class TMIRT(object):
             self.a = a_old
 
         return E
+
+
+    def E_dE_abilities():
+        """
+        Return the energy per user and the energy gradient with respect
+        to the abilities matrix.
+        """
+        # calculate the energy
+        E = np.sum(self.E())
+
+        da = np.zeros(self.a.shape)
+        for idx_resource in range(self.num_resources):
+            self.dEda_accumulate_resource(idx_resource, da)
+        for idx_exercise in range(self.num_exercises):
+            self.dEda_accumulate_exercise(idx_exercise, da)
+
+        # DEBUG check these gradients
+        return E, da
 
     def E_dE(self, theta):
         """
