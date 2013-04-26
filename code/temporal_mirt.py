@@ -28,6 +28,88 @@ class TMIRTResource(object):
             self.type = 'exercise'
 
 
+class HMC(object):
+    """
+    A Hamiltonian Monte Carlo sampler.
+    This is specifically designed to work with a TMIRT object, which has
+    some interesting properties.  Samples should be accepted or rejected
+    per-user, but the variables should be stored per time-slice, so the
+    sampler needs to be aware of the user <-> time slice mapping.
+    """
+
+    class state():
+        """
+        holds all the parameters which are updated by the sampler
+        """
+        def __init__(self, parent):
+            self.a = parent.model.a.copy()
+            self.v = parent.v.copy()
+            self.E = parent.E.copy()
+            self.dE = parent.dE.copy()
+            self.parent = parent
+        def apply_state(self, idx=None):
+            """
+            set the current state of the sampler/model to this state, for the
+            users listed in idx.  if idx is none, do it for all users.
+            """
+            if idx == None:
+                idx = np.asarray(range(self.E.shape[0]))
+            parent = self.parent
+
+            # the indices into the abilities matrix corresponding to these
+            # users
+            idx_a = parent.model.user_to_a(idx)
+
+            parent.model.a[:,idx_a] = self.a[:,idx_a].copy()
+            parent.v[:,idx_a] = self.v[:,idx_a].copy()
+            parent.E[idx] = self.E[idx]
+            parent.dE[idx_a] = self.dE[idx_a]
+
+
+    def __init__(self, model, epsilon=0.1, L=10, beta=0.5):
+        self.model = model
+        self.epsilon = epsilon
+        self.L = L
+        self.beta = beta
+        self.v = np.random.randn(model.a.shape[0], model.a.shape[1])
+        self.E, self.dE = model.E_dE_abilities()
+
+
+    def leapfrog(self):
+        a_shape = self.model.a.shape
+
+        for _ in range(self.L):
+            # initial half step
+            self.v -= dot(self.epsilon, self.dE.reshape((-1,1))).reshape(a_shape)/2.
+            # full step in position
+            self.model.a += dot(self.epsilon.T, self.v.reshape((-1,1))).reshape(a_shape)
+            self.E, self.dE = model.E_dE_abilities()
+            # final half step
+            self.v -= dot(self.epsilon, self.dE.reshape((-1,1))).reshape(a_shape)/2.
+
+        # flip the momentum
+        self.v = -self.v
+
+        # add the momentum terms to the energy
+        idx_pre = np.asarray(range(self.v.shape[1]))
+        Emom = self.model.map_energy_abilities_to_users(0.5 * self.v**2, idx_pre)
+        self.E += Emom
+
+
+    def sample(self, N=1):
+        for _ in range(N):
+            Sinit = self.state(self)
+            self.leapfrog()
+            Sleap = self.state(self)
+            # calculate the acceptance probabilty for each user
+            p_acc = np.exp(Sinit.E - Sleap.E)
+            # set the rejected updates back to their original value
+            bd = np.nonzero(p_acc < np.random.rand(self.E.shape[0],1).ravel())[0]
+            Sinit.apply_state(bd)
+            # flip the momentum
+            self.v = -self.v
+
+
 class TMIRT(object):
     """
     Holds:
@@ -459,6 +541,15 @@ class TMIRT(object):
         # for anything.
         full_bias = W.dot(W.dot(full_bias))
         return W, full_bias
+
+
+    def sample_abilities_HMC_natgrad(self,num_steps=1e3,epsilon=0.1,L=10,beta=0.5):
+
+        # we will scale our dynamics by W
+        W, _ = self.get_joint_gaussian_sample_matrices()
+
+        sampler = HMC()
+
 
 
     def sample_abilities_joint_gaussian(self, num_steps=1e3):
