@@ -10,18 +10,15 @@ class TMIRTResource(object):
     """
     Holds information on a single resource for the temporal mirt model.
     """
-    def __init__(self, row):
-        idx_pl = acc_util.FieldIndexer(acc_util.FieldIndexer.plog_fields)
-        # used to index the fields with a line of text in the input data file
+    def __init__(self, row, idx_pl):
         if row[idx_pl.rowtype] == 'problemlog':
-            idx_pl = acc_util.FieldIndexer(acc_util.FieldIndexer.plog_fields)
             self.correct = row[idx_pl.correct]
             self.time_done = row[idx_pl.time_done]
             self.time_taken = row[idx_pl.time_taken]
             self.name = row[idx_pl.exercise]
             self.type = 'exercise'
-        else:  # row[idx_pl.rowtype] == 'exercise':
-            idx_pl = acc_util.FieldIndexer(acc_util.FieldIndexer.vplog_fields)
+        else:
+            # TODO (eliana): Treat videos and exercises differently
             self.correct = 1 if row[idx_pl.correct] == 'True' else 0
             self.time_done = row[idx_pl.time_done]
             self.time_taken = row[idx_pl.time_taken]
