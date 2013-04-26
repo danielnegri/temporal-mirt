@@ -608,6 +608,8 @@ class TMIRT(object):
         sampler = HMC(self, epsilon=W, L=L, beta=beta)
         sampler.sample(N=num_steps)
 
+        return sampler.E
+
  
     def sample_abilities_diffusion(self, num_steps=1e4, epsilon=None):
 

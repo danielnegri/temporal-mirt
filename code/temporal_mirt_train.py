@@ -216,7 +216,10 @@ def main():
         # Compute (and print) the energies during learning as a diagnostic.
         # These should decrease.
 
-        E_samples = model.sample_abilities_diffusion(
+        #E_samples = model.sample_abilities_diffusion(
+        #    num_steps=options.sampling_num_steps,
+        #    epsilon=options.sampling_epsilon)
+        E_samples = model.sample_abilities_HMC_natgrad(
             num_steps=options.sampling_num_steps,
             epsilon=options.sampling_epsilon)
 
