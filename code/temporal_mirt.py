@@ -513,10 +513,10 @@ class TMIRT(object):
         return A
 
 
-    def get_joint_gaussian_sample_matrices(self):
+    def get_joint_gaussian_covariance_bias(self):
         # full ability to ability coupling matrix
         full_J = sparse.lil_matrix(
-           (self.num_times_a, self.num_abilities, self.num_times_a, self.num_abilities))
+           (self.num_times_a*self.num_abilities, self.num_times_a*self.num_abilities))
         # full abilities bias vector
         full_bias = sparse.lil_matrix((self.num_times_a, self.num_abilities))
 
@@ -528,10 +528,15 @@ class TMIRT(object):
             Jpre = dot(phi_m.T, np.dot(J, phi_m))
             Jcross = dot(J, phi_m)
 
-            full_J[idx_post, :, idx_post,:] += J.reshape((1,self.num_abilities,1,self.num_abilities))
-            full_J[idx_pre, :, idx_pre,:] += Jpre.reshape((1,self.num_abilities,1,self.num_abilities))
-            full_J[idx_post, :, idx_pre,:] += Jcross.reshape((1,self.num_abilities,1,self.num_abilities))
-            full_J[idx_pre,:,idx_post,:] += Jcross.T.reshape((1,self.num_abilities,1,self.num_abilities))
+            # DEBUG this is horribly inefficient!  some kind of wrapper for N-d sparse
+            # matrices?  Expanding the idx arrays?
+            for ai in range(self.num_abilities):
+                for aj in range(self.num_abilities):
+                    # python defaults to row major
+                    full_J[idx_post + self.num_times_a+ai, idx_post + self.num_times_a+aj] += J[ai,aj]
+                    full_J[idx_pre + self.num_times_a+ai, idx_pre + self.num_times_a+aj] += Jpre[ai,aj]
+                    full_J[idx_post + self.num_times_a+ai, idx_pre + self.num_times_a+aj] += Jcross[ai,aj]
+                    full_J[idx_pre + self.num_times_a+ai,idx_post + self.num_times_a+aj] += Jcross.T[ai,aj]
             # DEBUG check for factor of 2
             full_bias[idx_post,:] += dot(J, phi_b)
             full_bias[idx_pre,:] += dot(phi_m.T, dot(J, phi_b))
@@ -546,7 +551,7 @@ class TMIRT(object):
     def sample_abilities_HMC_natgrad(self,num_steps=1e3,epsilon=0.1,L=10,beta=0.5):
 
         # we will scale our dynamics by W
-        W, _ = self.get_joint_gaussian_sample_matrices()
+        W, _ = self.get_joint_gaussian_covariance_bias()
 
         sampler = HMC()
 
