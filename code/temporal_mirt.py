@@ -90,12 +90,12 @@ class HMC(object):
 
         for _ in range(self.L):
             # initial half step
-            self.v -= dot(self.epsilon, self.dE.reshape((-1,1))).reshape(a_shape)/2.
+            self.v -= np.dot(self.epsilon, self.dE.reshape((-1,1))).reshape(a_shape)/2.
             # full step in position
-            self.model.a += dot(self.epsilon.T, self.v.reshape((-1,1))).reshape(a_shape)
+            self.model.a += np.dot(self.epsilon.T, self.v.reshape((-1,1))).reshape(a_shape)
             self.E, self.dE = model.E_dE_abilities()
             # final half step
-            self.v -= dot(self.epsilon, self.dE.reshape((-1,1))).reshape(a_shape)/2.
+            self.v -= np.dot(self.epsilon, self.dE.reshape((-1,1))).reshape(a_shape)/2.
 
         # flip the momentum
         self.v = -self.v
@@ -573,21 +573,23 @@ class TMIRT(object):
             idx_pre, idx_post, a_pre, a_post, a_err, J = \
                 self.get_abilities_matrices(idx_resource)
             Phi = self.Phi[:, :, idx_resource]
-            Jpre = dot(phi_m.T, np.dot(J, phi_m))
-            Jcross = dot(J, phi_m)
+            phi_m = Phi[:,:-1] # no bias
+            phi_b = Phi[:,[-1]] # bias only
+            Jpre = np.dot(phi_m.T, np.dot(J, phi_m))
+            Jcross = np.dot(J, phi_m)
 
             # TODO these loops are horribly inefficient!  some kind of wrapper for
             # N-d sparse matrices?  Expanding the idx arrays?
             for ai in range(self.num_abilities):
                 for aj in range(self.num_abilities):
                     # python defaults to row major indexing
-                    full_J[idx_post + self.num_times_a+ai, idx_post + self.num_times_a+aj] += J[ai,aj]
-                    full_J[idx_pre + self.num_times_a+ai, idx_pre + self.num_times_a+aj] += Jpre[ai,aj]
-                    full_J[idx_post + self.num_times_a+ai, idx_pre + self.num_times_a+aj] += Jcross[ai,aj]
-                    full_J[idx_pre + self.num_times_a+ai,idx_post + self.num_times_a+aj] += Jcross.T[ai,aj]
+                    full_J[idx_post + self.num_times_a+ai, idx_post + self.num_times_a+aj] += J[ai,aj]*np.ones((len(idx_post)))
+                    full_J[idx_pre + self.num_times_a+ai, idx_pre + self.num_times_a+aj] += Jpre[ai,aj]*np.ones((len(idx_pre)))
+                    full_J[idx_post + self.num_times_a+ai, idx_pre + self.num_times_a+aj] += Jcross[ai,aj]*np.ones((len(idx_post)))
+                    full_J[idx_pre + self.num_times_a+ai,idx_post + self.num_times_a+aj] += Jcross.T[ai,aj]*np.ones((len(idx_pre)))
             # DEBUG check for factor of 2
-            full_bias[idx_post,:] += dot(J, phi_b)
-            full_bias[idx_pre,:] += dot(phi_m.T, dot(J, phi_b))
+            full_bias[idx_post,:] += np.dot(J, phi_b)
+            full_bias[idx_pre,:] += np.dot(phi_m.T, np.dot(J, phi_b))
 
         # TODO convert from LIL to ?
 
