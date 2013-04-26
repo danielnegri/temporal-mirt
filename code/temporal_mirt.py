@@ -45,6 +45,7 @@ class HMC(object):
             self.a = parent.model.a.copy()
             self.v = parent.v.copy()
             self.E = parent.E.copy()
+            self.Ev = parent.Ev.copy()
             self.dE = parent.dE.copy()
             self.parent = parent
         def apply_state(self, idx=None):
@@ -62,6 +63,7 @@ class HMC(object):
 
             parent.model.a[:,idx_a] = self.a[:,idx_a].copy()
             parent.v[:,idx_a] = self.v[:,idx_a].copy()
+            parent.Ev[idx] = self.Ev[idx]
             parent.E[idx] = self.E[idx]
             parent.dE[idx_a] = self.dE[idx_a]
 
@@ -109,7 +111,7 @@ class HMC(object):
             self.leapfrog()
             Sleap = self.state(self)
             # calculate the acceptance probabilty for each user
-            p_acc = np.exp(Sinit.E - Sleap.E)
+            p_acc = np.exp(Sinit.E - Sleap.E + Sinit.Ev - Sleap.Ev)
             # set the rejected updates back to their original value
             bd = np.nonzero(p_acc < np.random.rand(self.E.shape[0],1).ravel())[0]
             Sinit.apply_state(bd)
@@ -117,7 +119,9 @@ class HMC(object):
             self.v = -self.v
 
             # corrupt the momentum with noise
+            self.v = np.sqrt(1.-self.beta)*self.v + np.sqrt(self.beta)*np.random.randn(self.v.shape[0],self.v.shape[1])
             # update the momentum contribution to the energy
+            self.calc_Ev()
 
 
 class TMIRT(object):
