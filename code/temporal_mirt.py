@@ -536,8 +536,8 @@ class TMIRT(object):
         self.J = np.tile(np.eye(self.num_abilities).reshape(
                                 (self.num_abilities, self.num_abilities, 1)),
                                 (1, 1, self.num_resources)) * 10
-        self.W_exercise_correct = np.zeros((self.num_exercises,
-                                    self.num_abilities + 1))
+        self.W_exercise_correct = np.random.randn(self.num_exercises,
+                                    self.num_abilities + 1)/np.sqrt(self.num_abilities)
         self.W_exercise_logtime = np.zeros((self.num_exercises,
                                     self.num_abilities + 1))
         # exact zeros cause problems for sparse matrices
