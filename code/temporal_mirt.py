@@ -61,8 +61,8 @@ class HMC(object):
             else:
                 # the indices into the abilities matrix corresponding to these
                 # users
-                idx_a = np.nonzero(np.min(parent.model.a_to_user.reshape((-1,1)) - idx.reshape((1,-1)), axis=1) == 0)
-
+                idx_a = np.nonzero(np.min(np.abs(parent.model.a_to_user.reshape((-1,1)) - idx.reshape((1,-1))), axis=1) == 0)[0]
+                
             parent.model.a[:,idx_a] = self.a[:,idx_a].copy()
             parent.v[:,idx_a] = self.v[:,idx_a].copy()
             parent.Ev[idx] = self.Ev[idx]
@@ -120,12 +120,15 @@ class HMC(object):
             p_acc = np.exp(Sinit.E - Sleap.E + Sinit.Ev - Sleap.Ev)
             # set the rejected updates back to their original value
             bd = np.nonzero(p_acc < np.random.rand(self.E.shape[0],1).ravel())[0]
+
+            bd = np.nonzero(Sinit.E < np.inf)[0] # DEBUG
+
             Sinit.apply_state(bd)
             # flip the momentum
             self.v = -self.v
 
             nrej += bd.shape[0]
-            nacc += self.v.shape[1] - nrej
+            nacc += self.E.shape[0] - bd.shape[0]
 
             self.calc_Ev() # DEBUG
             print "sample step %d, acc %d, rej %d, E(x) %g, E(v) %g, E(x) + E(v) %g"%(nn, nacc, nrej, np.mean(self.E), np.mean(self.Ev), np.mean(self.E)+np.mean(self.Ev))
