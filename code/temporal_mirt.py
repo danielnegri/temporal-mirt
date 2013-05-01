@@ -59,6 +59,9 @@ class HMC(object):
                 #idx = np.asarray(range(self.E.shape[0]))
                 idx_a = np.asarray(range(parent.model.a.shape[1]))
             else:
+                if idx.shape[0] == 0:
+                    # nothing to do
+                    return
                 # the indices into the abilities matrix corresponding to these
                 # users
                 idx_a = np.nonzero(np.min(np.abs(parent.model.a_to_user.reshape((-1,1)) - idx.reshape((1,-1))), axis=1) == 0)[0]
