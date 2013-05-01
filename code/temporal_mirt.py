@@ -282,6 +282,13 @@ class TMIRT(object):
         E = self.map_energy_abilities_to_users(E, idx)
         return E
 
+    def dEda_accumulate_chain_start(self, da):
+        """ the energy contribution from t=1 (before any resource) per user """
+        idx = self.index_lookup['chain start']
+        a = self.a[:, idx]
+        da[:,idx] += a
+        return da
+
     def E_exercise(self, idx_exercise):
         """
         The energy contribution from the conditional distribution over the
@@ -341,7 +348,7 @@ class TMIRT(object):
                 self.get_abilities_matrices(idx_resource)
         Phi = self.Phi[:, :, idx_resource]
 
-        da[:,idx_pre] += -np.dot(Phi.T, np.dot(J, a_err))[:-1, :]
+        da[:,idx_pre] += -np.dot(Phi.T, np.dot(J, a_err))[:-1, :] - np.dot(J, a_err)
         da[:,idx_post] += np.dot(J, a_err)
 
     def dEdPhi_resource(self, idx_resource):
@@ -426,6 +433,7 @@ class TMIRT(object):
         E = self.E()
 
         da = np.zeros(self.a.shape)
+        self.dEda_accumulate_chain_start(da)
         for idx_resource in range(self.num_resources):
             self.dEda_accumulate_resource(idx_resource, da)
         for idx_exercise in range(self.num_exercises):

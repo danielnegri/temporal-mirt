@@ -155,7 +155,27 @@ def load_data(options):
 
 def check_gradients_E_step():
     # TODO(jascha) calculate gradients w.r.t. a, use to sample more efficiently
-    pass
+    options = get_cmd_line_arguments()
+    print >>sys.stderr, "Checking gradients E step.", options  # DEBUG
+
+    step_size = 1e-6
+    model = load_data(options)
+
+    a0 = model.a.copy()
+    f0, df0 = model.E_dE_abilities()
+    # test gradients in a random order.  This lets us run check gradients on the
+    # full size model, but still statistically test every type of gradient.
+    while True:
+        ind0 = np.floor(np.random.rand()*a0.shape[0])
+        ind1 = np.floor(np.random.rand()*a0.shape[1])
+ 
+        model.a = a0.copy()
+        model.a[ind0,ind1] += step_size
+        f1, df1 = model.E_dE_abilities()
+
+        df_true = np.sum((f1 - f0))/step_size
+
+        print "ind", ind0, ind1, "df pred", df0[ind0,ind1], "df true", df_true, "df pred - df true", df0[ind0,ind1] - df_true
 
 
 
@@ -234,11 +254,13 @@ def main():
 
         # Maximization step
         old_theta = model.flatten_parameters()
-        new_theta, L, _ = scipy.optimize.fmin_l_bfgs_b(
-            model.E_dE,
-            old_theta.copy().ravel(),
-            disp=0,
-            maxfun=options.max_pass_lbfgs, m=100)
+        L = 0.
+        new_theta = old_theta
+        #new_theta, L, _ = scipy.optimize.fmin_l_bfgs_b(
+        #    model.E_dE,
+        #    old_theta.copy().ravel(),
+        #    disp=0,
+        #    maxfun=options.max_pass_lbfgs, m=100)
         model.unflatten_parameters(new_theta)
 
         # Print debuggin info on the progress of the training
