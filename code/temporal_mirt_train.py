@@ -25,7 +25,7 @@ def get_cmd_line_arguments():
     #   help="Number of sampling steps to use for sample_abilities_diffusion.")
     parser.add_argument("-s", "--sampling_num_steps", type=int, default=10,
         help="Number of sampling steps to use for sample_abilities_diffusion.")
-    parser.add_argument("-l", "--sampling_epsilon", type=float, default=0.01,
+    parser.add_argument("-l", "--sampling_epsilon", type=float, default=0.1,
      help="The length scale to use for sampling update proposals.")
     # The number of EM iterations to do during learning
     parser.add_argument("-n", "--num_epochs", type=int, default=10000)
@@ -254,13 +254,13 @@ def main():
 
         # Maximization step
         old_theta = model.flatten_parameters()
-        L = 0.
-        new_theta = old_theta
-        #new_theta, L, _ = scipy.optimize.fmin_l_bfgs_b(
-        #    model.E_dE,
-        #    old_theta.copy().ravel(),
-        #    disp=0,
-        #    maxfun=options.max_pass_lbfgs, m=100)
+        #L = 0.
+        #new_theta = old_theta
+        new_theta, L, _ = scipy.optimize.fmin_l_bfgs_b(
+            model.E_dE,
+            old_theta.copy().ravel(),
+            disp=0,
+            maxfun=options.max_pass_lbfgs, m=100)
         model.unflatten_parameters(new_theta)
 
         # Print debuggin info on the progress of the training
