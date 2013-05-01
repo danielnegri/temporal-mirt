@@ -53,19 +53,21 @@ class HMC(object):
             set the current state of the sampler/model to this state, for the
             users listed in idx.  if idx is none, do it for all users.
             """
-            if idx == None:
-                idx = np.asarray(range(self.E.shape[0]))
             parent = self.parent
 
-            # the indices into the abilities matrix corresponding to these
-            # users
-            idx_a = parent.model.user_to_a(idx)
+            if idx == None:
+                #idx = np.asarray(range(self.E.shape[0]))
+                idx_a = np.asarray(range(parent.model.a.shape[1]))
+            else:
+                # the indices into the abilities matrix corresponding to these
+                # users
+                idx_a = np.nonzero(np.min(parent.model.a_to_user.reshape((-1,1)) - idx.reshape((1,-1)), axis=1) == 0)
 
             parent.model.a[:,idx_a] = self.a[:,idx_a].copy()
             parent.v[:,idx_a] = self.v[:,idx_a].copy()
             parent.Ev[idx] = self.Ev[idx]
             parent.E[idx] = self.E[idx]
-            parent.dE[idx_a] = self.dE[idx_a]
+            parent.dE[:,idx_a] = self.dE[:,idx_a]
 
 
     def __init__(self, model, epsilon=0.1, L=10, beta=0.5):
@@ -81,7 +83,7 @@ class HMC(object):
     def calc_Ev(self):
         """ calculate the momentum contribution to the energy """
         idx_pre = np.asarray(range(self.v.shape[1]))
-        self.Ev = self.model.map_energy_abilities_to_users(0.5 * self.v**2, idx_pre)
+        self.Ev = self.model.map_energy_abilities_to_users(np.sum(0.5 * self.v**2, axis=0), idx_pre)
 
 
     def leapfrog(self):
@@ -90,12 +92,13 @@ class HMC(object):
 
         for _ in range(self.L):
             # initial half step
-            self.v -= np.dot(self.epsilon, self.dE.reshape((-1,1))).reshape(a_shape)/2.
+            #self.v -= np.dot(self.epsilon, self.dE.reshape((-1,1))).reshape(a_shape)/2.
+            self.v -= self.epsilon.dot(self.dE.reshape((-1,1))).reshape(a_shape)/2.
             # full step in position
-            self.model.a += np.dot(self.epsilon.T, self.v.reshape((-1,1))).reshape(a_shape)
-            self.E, self.dE = model.E_dE_abilities()
+            self.model.a += self.epsilon.T.dot(self.v.reshape((-1,1))).reshape(a_shape)
+            self.E, self.dE = self.model.E_dE_abilities()
             # final half step
-            self.v -= np.dot(self.epsilon, self.dE.reshape((-1,1))).reshape(a_shape)/2.
+            self.v -= self.epsilon.dot(self.dE.reshape((-1,1))).reshape(a_shape)/2.
 
         # flip the momentum
         self.v = -self.v
@@ -106,7 +109,10 @@ class HMC(object):
 
     def sample(self, N=1):
         """ run N steps of Hamiltonian Monte Carlo sampling """
-        for _ in range(N):
+        nacc = 0
+        nrej = 0
+        for nn in range(N):
+            print "sample step %d, acc %d, rej %d, E(x) %g, E(v) %g, E(x) + E(v) %g"%(nn, nacc, nrej, np.mean(self.E), np.mean(self.Ev), np.mean(self.E)+np.mean(self.Ev))
             Sinit = self.state(self)
             self.leapfrog()
             Sleap = self.state(self)
@@ -118,6 +124,11 @@ class HMC(object):
             # flip the momentum
             self.v = -self.v
 
+            nrej += bd.shape[0]
+            nacc += self.v.shape[1] - nrej
+
+            self.calc_Ev() # DEBUG
+            print "sample step %d, acc %d, rej %d, E(x) %g, E(v) %g, E(x) + E(v) %g"%(nn, nacc, nrej, np.mean(self.E), np.mean(self.Ev), np.mean(self.E)+np.mean(self.Ev))
             # corrupt the momentum with noise
             self.v = np.sqrt(1.-self.beta)*self.v + np.sqrt(self.beta)*np.random.randn(self.v.shape[0],self.v.shape[1])
             # update the momentum contribution to the energy
@@ -157,6 +168,8 @@ class TMIRT(object):
 
         # for holding exercise correctness and incorrectness
         self.x = []
+
+        self.sampler = None
 
     def get_resource_index(self, resource):
         """
@@ -292,10 +305,10 @@ class TMIRT(object):
         """ The derivative of the energy function in terms of a,
         for all users, for a single exercise. """
         x, idx_x, a, idx_a, Wa = self.get_exercise_matrices(idx_exercise)
-        W = self.W_exercise_correct[idx_exercise, :]
         expxWa = np.exp(-x*(Wa))
         term1 = (-1./(1. + expxWa)*expxWa*x)
-        da[:,idx_a] += np.dot(W.T, term1)
+        W = self.W_exercise_correct[idx_exercise, :-1]
+        da[:,idx_a] += np.dot(W.reshape((-1,1)), term1.reshape((1,-1)))
 
     def E_resource(self, idx_resource):
         """
@@ -308,7 +321,7 @@ class TMIRT(object):
         E = 0.5 * np.sum(a_err*np.dot(J, a_err), axis=0)
         # DEBUG check sign
         # Gaussian normalization term
-        E += -np.sum(np.log(np.linalg.eig(J)[0]))  # *idx_pre.shape[0]
+        E += -np.sum(np.log(np.real(np.linalg.eig(J)[0])))  # *idx_pre.shape[0]
 
         # NOTE adjacent columns in a are coupled, and that
         # coupling energy is only assigned to one of the columns, so it's
@@ -325,7 +338,7 @@ class TMIRT(object):
                 self.get_abilities_matrices(idx_resource)
         Phi = self.Phi[:, :, idx_resource]
 
-        da[:,idx_pre] += -np.dot(Phi.T, np.dot(J, a_err))
+        da[:,idx_pre] += -np.dot(Phi.T, np.dot(J, a_err))[:-1, :]
         da[:,idx_post] += np.dot(J, a_err)
 
     def dEdPhi_resource(self, idx_resource):
@@ -401,13 +414,13 @@ class TMIRT(object):
         return E
 
 
-    def E_dE_abilities():
+    def E_dE_abilities(self):
         """
         Return the energy per user and the energy gradient with respect
         to the abilities matrix.
         """
         # calculate the energy
-        E = np.sum(self.E())
+        E = self.E()
 
         da = np.zeros(self.a.shape)
         for idx_resource in range(self.num_resources):
@@ -444,8 +457,8 @@ class TMIRT(object):
         return E/self.num_users, dE/self.num_users
 
     def increment_num_times(self, num_users):
-        self.num_times_a += 1
         self.a_to_user.append(num_users)
+        self.num_times_a += 1
 
     def add_user(self, user, resources):
         """
@@ -513,6 +526,9 @@ class TMIRT(object):
                                     self.num_abilities + 1))
         self.W_exercise_logtime = np.zeros((self.num_exercises,
                                     self.num_abilities + 1))
+        # exact zeros cause problems for sparse matrices
+        self.J += np.random.randn(*self.J.shape)*1e-10
+        self.Phi += np.random.randn(*self.Phi.shape)*1e-10
 
 
     def invsqrtm(self, W):
@@ -562,6 +578,40 @@ class TMIRT(object):
 
 
     def get_joint_gaussian_covariance_bias(self):
+
+        full_J = np.zeros((self.num_times_a, self.num_abilities))
+
+        for idx_resource in range(self.num_resources):
+            idx_pre, idx_post, a_pre, a_post, a_err, J = \
+                self.get_abilities_matrices(idx_resource)
+            Phi = self.Phi[:, :, idx_resource]
+            phi_m = Phi[:,:-1] # no bias
+            phi_b = Phi[:,[-1]] # bias only
+            Jpre = np.dot(phi_m.T, np.dot(J, phi_m))
+            Jcross = np.dot(J, phi_m)
+
+            full_J[idx_post, :] += np.diag(J)
+            full_J[idx_pre,  :] += np.diag(Jpre)
+
+        # and the univariate Gaussian over the initial state
+        idx_start = self.index_lookup['chain start']
+        full_J[idx_start, :] += 1.
+
+        W = sparse.lil_matrix(
+           (self.num_times_a*self.num_abilities, self.num_times_a*self.num_abilities))
+
+        W.setdiag(1. / np.sqrt(full_J.ravel()))
+
+        W = W.tocsr()
+
+        # TODO(jascha) set full_bias
+        full_bias = np.zeros((self.num_times_a, self.num_abilities))
+
+        return W, full_bias
+
+        # TODO(jascha)  sparse matrices suck in python!! the below code is insanely slow.
+        # figure out a way to make them suck less, or to not use them.
+
         # full ability to ability coupling matrix
         full_J = sparse.lil_matrix(
            (self.num_times_a*self.num_abilities, self.num_times_a*self.num_abilities))
@@ -578,6 +628,9 @@ class TMIRT(object):
             Jpre = np.dot(phi_m.T, np.dot(J, phi_m))
             Jcross = np.dot(J, phi_m)
 
+            print idx_resource, idx_pre.shape, idx_post.shape
+
+
             # TODO these loops are horribly inefficient!  some kind of wrapper for
             # N-d sparse matrices?  Expanding the idx arrays?
             for ai in range(self.num_abilities):
@@ -588,8 +641,8 @@ class TMIRT(object):
                     full_J[idx_post + self.num_times_a+ai, idx_pre + self.num_times_a+aj] += Jcross[ai,aj]*np.ones((len(idx_post)))
                     full_J[idx_pre + self.num_times_a+ai,idx_post + self.num_times_a+aj] += Jcross.T[ai,aj]*np.ones((len(idx_pre)))
             # DEBUG check for factor of 2
-            full_bias[idx_post,:] += np.dot(J, phi_b)
-            full_bias[idx_pre,:] += np.dot(phi_m.T, np.dot(J, phi_b))
+            full_bias[idx_post,:] += (np.dot(J, phi_b)).T
+            full_bias[idx_pre,:] += (np.dot(phi_m.T, np.dot(J, phi_b))).T
 
         # TODO convert from LIL to ?
 
@@ -607,8 +660,9 @@ class TMIRT(object):
         W, _ = self.get_joint_gaussian_covariance_bias()
         W *= epsilon
 
-        sampler = HMC(self, epsilon=W, L=L, beta=beta)
-        sampler.sample(N=num_steps)
+        if self.sampler == None:
+            self.sampler = HMC(self, epsilon=W, L=L, beta=beta)
+        self.sampler.sample(N=num_steps)
 
         return sampler.E
 

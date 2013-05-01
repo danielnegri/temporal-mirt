@@ -25,7 +25,7 @@ def get_cmd_line_arguments():
     #   help="Number of sampling steps to use for sample_abilities_diffusion.")
     parser.add_argument("-s", "--sampling_num_steps", type=int, default=100,
         help="Number of sampling steps to use for sample_abilities_diffusion.")
-    parser.add_argument("-l", "--sampling_epsilon", type=float, default=None,
+    parser.add_argument("-l", "--sampling_epsilon", type=float, default=0.1,
      help="The length scale to use for sampling update proposals.")
     # The number of EM iterations to do during learning
     parser.add_argument("-n", "--num_epochs", type=int, default=10000)
