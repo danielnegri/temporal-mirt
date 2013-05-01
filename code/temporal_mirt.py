@@ -121,7 +121,7 @@ class HMC(object):
             # set the rejected updates back to their original value
             bd = np.nonzero(p_acc < np.random.rand(self.E.shape[0],1).ravel())[0]
 
-            bd = np.nonzero(Sinit.E < np.inf)[0] # DEBUG
+            #bd = np.nonzero(Sinit.E < np.inf)[0] # DEBUG
 
             Sinit.apply_state(bd)
             # flip the momentum
@@ -130,7 +130,7 @@ class HMC(object):
             nrej += bd.shape[0]
             nacc += self.E.shape[0] - bd.shape[0]
 
-            self.calc_Ev() # DEBUG
+            #self.calc_Ev() # DEBUG
             print "sample step %d, acc %d, rej %d, E(x) %g, E(v) %g, E(x) + E(v) %g"%(nn, nacc, nrej, np.mean(self.E), np.mean(self.Ev), np.mean(self.E)+np.mean(self.Ev))
             # corrupt the momentum with noise
             self.v = np.sqrt(1.-self.beta)*self.v + np.sqrt(self.beta)*np.random.randn(self.v.shape[0],self.v.shape[1])
@@ -603,7 +603,9 @@ class TMIRT(object):
         W = sparse.lil_matrix(
            (self.num_times_a*self.num_abilities, self.num_times_a*self.num_abilities))
 
-        W.setdiag(1. / np.sqrt(full_J.ravel()))
+        # DEBUG
+        #W.setdiag(1. / np.sqrt(full_J.ravel()))
+        W.setdiag(full_J.ravel()**(-1./4.))
 
         W = W.tocsr()
 
@@ -667,7 +669,7 @@ class TMIRT(object):
             self.sampler = HMC(self, epsilon=W, L=L, beta=beta)
         self.sampler.sample(N=num_steps)
 
-        return sampler.E
+        return self.sampler.E
 
  
     def sample_abilities_diffusion(self, num_steps=1e4, epsilon=None):
