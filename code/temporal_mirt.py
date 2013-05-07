@@ -57,15 +57,18 @@ class HMC(object):
 
             if idx == None:
                 #idx = np.asarray(range(self.E.shape[0]))
-                idx_a = np.asarray(range(parent.model.a.shape[1]))
+                idx_a = np.arange(parent.model.a.shape[1], dtype=int)
             else:
                 if idx.shape[0] == 0:
                     # nothing to do
                     return
                 # the indices into the abilities matrix corresponding to these
                 # users
-                idx_a = np.nonzero(np.min(np.abs(parent.model.a_to_user.reshape((-1,1)) - idx.reshape((1,-1))), axis=1) == 0)[0]
-                
+                cmp = zeros((np.prod(parent.model.a_to_user.shape)), dtype=bool)
+                for ii in idx:
+                    cmp += (parent.model.a_to_user.reshape((-1,1)) == ii)
+                idx_a = np.nonzero(cmp)[0]
+
             parent.model.a[:,idx_a] = self.a[:,idx_a].copy()
             parent.v[:,idx_a] = self.v[:,idx_a].copy()
             parent.Ev[idx] = self.Ev[idx]
@@ -85,7 +88,7 @@ class HMC(object):
 
     def calc_Ev(self):
         """ calculate the momentum contribution to the energy """
-        idx_pre = np.asarray(range(self.v.shape[1]))
+        idx_pre = np.arange(self.v.shape[1], dtype=int)
         self.Ev = self.model.map_energy_abilities_to_users(np.sum(0.5 * self.v**2, axis=0), idx_pre)
 
 
@@ -96,12 +99,15 @@ class HMC(object):
         for _ in range(self.L):
             # initial half step
             #self.v -= np.dot(self.epsilon, self.dE.reshape((-1,1))).reshape(a_shape)/2.
-            self.v -= self.epsilon.dot(self.dE.reshape((-1,1))).reshape(a_shape)/2.
+            #self.v -= self.epsilon.dot(self.dE.reshape((-1,1))).reshape(a_shape)/2.
+            self.v -= (self.epsilon * self.dE.reshape((-1))).reshape(a_shape)/2.
             # full step in position
-            self.model.a += self.epsilon.T.dot(self.v.reshape((-1,1))).reshape(a_shape)
+            #self.model.a += self.epsilon.T.dot(self.v.reshape((-1,1))).reshape(a_shape)
+            self.model.a += (self.epsilon * self.v.reshape((-1))).reshape(a_shape)
             self.E, self.dE = self.model.E_dE_abilities()
             # final half step
-            self.v -= self.epsilon.dot(self.dE.reshape((-1,1))).reshape(a_shape)/2.
+            #self.v -= self.epsilon.dot(self.dE.reshape((-1,1))).reshape(a_shape)/2.
+            self.v -= (self.epsilon * self.dE.reshape((-1))).reshape(a_shape)/2.
 
         # flip the momentum
         self.v = -self.v
@@ -611,14 +617,16 @@ class TMIRT(object):
         idx_start = self.index_lookup['chain start']
         full_J[idx_start, :] += 1.
 
-        W = sparse.lil_matrix(
-           (self.num_times_a*self.num_abilities, self.num_times_a*self.num_abilities))
+#        W = sparse.lil_matrix(
+#           (self.num_times_a*self.num_abilities, self.num_times_a*self.num_abilities))
+#
+#        # DEBUG
+#        #W.setdiag(1. / np.sqrt(full_J.ravel()))
+#        W.setdiag(full_J.ravel()**(-1./4.))
+#
+#        W = W.tocsr()
 
-        # DEBUG
-        #W.setdiag(1. / np.sqrt(full_J.ravel()))
-        W.setdiag(full_J.ravel()**(-1./4.))
-
-        W = W.tocsr()
+        W = full_J.ravel()**(-1./4.)
 
         # TODO(jascha) set full_bias
         full_bias = np.zeros((self.num_times_a, self.num_abilities))
@@ -676,11 +684,14 @@ class TMIRT(object):
         W, _ = self.get_joint_gaussian_covariance_bias()
         W *= epsilon
 
-        if self.sampler == None:
-            self.sampler = HMC(self, epsilon=W, L=L, beta=beta)
-        self.sampler.sample(N=num_steps)
+        #if self.sampler == None:
+        #    self.sampler = HMC(self, epsilon=W, L=L, beta=beta)
+        #self.sampler.sample(N=num_steps)
 
-        return self.sampler.E
+        sampler = HMC(self, epsilon=W, L=L, beta=beta)
+        sampler.sample(N=num_steps)
+
+        return sampler.E
 
  
     def sample_abilities_diffusion(self, num_steps=1e4, epsilon=None):

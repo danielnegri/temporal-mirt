@@ -22,21 +22,21 @@ def get_cmd_line_arguments():
     parser.add_argument("-a", "--num_abilities", type=int, default=2,
            help="Number of hidden ability units.")
     #parser.add_argument("-s", "--sampling_num_steps", type=int, default=10,
-    #   help="Number of sampling steps to use for sample_abilities_diffusion.")
     parser.add_argument("-s", "--sampling_num_steps", type=int, default=10,
-        help="Number of sampling steps to use for sample_abilities_diffusion.")
+        help="Number of sampling steps to use for the E step.")
     parser.add_argument("-l", "--sampling_epsilon", type=float, default=0.1,
      help="The length scale to use for sampling update proposals.")
-    # The number of EM iterations to do during learning
-    parser.add_argument("-n", "--num_epochs", type=int, default=10000)
+    parser.add_argument("-n", "--num_epochs", type=int, default=10000,
+        help="The number of EM iterations to do during learning")
     # The number of copies of the data to train on.  If there is too little
     # training data, increase this number in order to maintain multiple samples
     # from the abilities vector for each student.  A sign that there is too
     # little training data is if the update step length ||dcouplings|| remains
     # large.
-    parser.add_argument("-q", "--num_replicas", type=int, default=1)
-    # The number of LBFGS descent steps to do per EM iteration
-    parser.add_argument("-m", "--max_pass_lbfgs", type=int, default=5)
+    parser.add_argument("-q", "--num_replicas", type=int, default=1,
+        help="The number of copies of the data to train on.")
+    parser.add_argument("-m", "--max_pass_lbfgs", type=int, default=5,
+        help="The number of LBFGS descent steps to make per M step.")
     # The weight for an L2 regularizer on the parameters.  This can be very
     # small, but keeps the weights from running away in a weakly constrained
     # direction.
@@ -49,15 +49,16 @@ def get_cmd_line_arguments():
         help="""Maximum number of intermediate distributions (sampling steps)
         to use when computing log likelihood via AIS.  If the estimate doesn't
         converge, then increase this number.""")
-    # the source data file
     parser.add_argument("-f", "--file", type=str,
-            default='data/user_assessment.responses')
-    # the root filename for output
-    parser.add_argument("-o", "--output", type=str, default='')
-    # DEBUG use parse_known_args rather than parse_args so can easily run it inside pylab
+            default='data/user_assessment.responses',
+            help="The source data file.")
+    parser.add_argument("-o", "--output", type=str, default='',
+        help="The root filename for output.")
     parser.add_argument("-i", "--indexer", type=str, default='plog',
         help="This defines the model that you'll use to parse the data\
         (look in accuracy_model_util for examples")
+
+    # DEBUG use parse_known_args rather than parse_args so can easily run it inside pylab
     options, _ = parser.parse_known_args()
 
     if options.output == '':
@@ -311,7 +312,7 @@ def main():
             for ii in range(model.J.shape[0]):
                 for jj in range(model.J.shape[1]):
                     print >>f1, "J%d_%d," % (ii, jj),
-            print >>f1
+            print >>f1, "resource name"
 
             for nm in nms:
                 Phi = model.Phi[:, :, model.resource_index[nm]]
@@ -324,7 +325,7 @@ def main():
                 for ii in range(model.J.shape[0]):
                     for jj in range(model.J.shape[1]):
                         print >>f1, J[ii, jj], ',',
-                print >>f1
+                print >>f1, str(nm)
 
         if False:
             # compute log likelihood
