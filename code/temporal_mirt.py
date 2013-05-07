@@ -64,10 +64,14 @@ class HMC(object):
                     return
                 # the indices into the abilities matrix corresponding to these
                 # users
-                cmp = zeros((np.prod(parent.model.a_to_user.shape)), dtype=bool)
+                compare = np.zeros((np.prod(parent.model.a_to_user.shape)), dtype=bool)
                 for ii in idx:
-                    cmp += (parent.model.a_to_user.reshape((-1,1)) == ii)
-                idx_a = np.nonzero(cmp)[0]
+                    #print ii
+                    #print parent.model.a_to_user.shape
+                    #print compare.shape
+                    #print np.prod(parent.model.a_to_user.shape)
+                    compare += (parent.model.a_to_user.reshape((-1)) == ii)
+                idx_a = np.nonzero(compare)[0]
 
             parent.model.a[:,idx_a] = self.a[:,idx_a].copy()
             parent.v[:,idx_a] = self.v[:,idx_a].copy()
