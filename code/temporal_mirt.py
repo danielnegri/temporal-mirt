@@ -17,13 +17,20 @@ class TMIRTResource(object):
             self.time_taken = row[idx_pl.time_taken]
             self.name = row[idx_pl.exercise]
             self.type = 'exercise'
-        else:
+        elif row[idx_pl.rowtype] == 'exercise':
             # TODO (eliana): Treat videos and exercises differently
             self.correct = 1 if row[idx_pl.correct] == 'True' else 0
             self.time_done = row[idx_pl.time_done]
             self.time_taken = row[idx_pl.time_taken]
             self.name = row[idx_pl.exercise]
             self.type = 'exercise'
+        elif row[idx_pl.rowtype] == 'video':
+            # TODO (eliana): Treat videos and exercises differently
+            self.completed = 1 if row[idx_pl.correct] == 'True' else 0
+            self.time_done = row[idx_pl.time_done]
+            self.time_taken = row[idx_pl.time_taken]
+            self.name = row[idx_pl.exercise]
+            self.type = 'video'
 
 
 class HMC(object):
@@ -151,6 +158,8 @@ class HMC(object):
             self.calc_Ev()
 
 
+# TODO(jascha) should break this apart into two classes, one to hold the model
+# and the other to hold the training data
 class TMIRT(object):
     """
     Holds:
