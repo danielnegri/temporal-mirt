@@ -169,7 +169,7 @@ def check_gradients_E_step():
     while True:
         ind0 = np.floor(np.random.rand()*a0.shape[0])
         ind1 = np.floor(np.random.rand()*a0.shape[1])
- 
+
         model.a = a0.copy()
         model.a[ind0,ind1] += step_size
         f1, df1 = model.E_dE_abilities()
@@ -274,58 +274,6 @@ def main():
         # save state as a .npz
         np.savez("%s_epoch=%d.npz" % (options.output, epoch),
                  tmirt=model)
-
-        # output lots of debugging information
-        if True:
-            # exercise prediciton information
-            # save state as .csv - just for easy debugging inspection
-            f1 = open("%s_exercise_epoch=%d.csv" %
-                    (options.output, epoch), 'w+')
-            couplings = model.W_exercise_correct
-
-            exercise_ind_dict = model.exercise_index
-            tt = [(couplings[exercise_ind_dict[nm], :-1],
-                   couplings[exercise_ind_dict[nm], -1], nm)
-                  for nm in exercise_ind_dict.keys()]
-            tt = sorted(tt, key=lambda tl: tl[1])
-            print >>f1, 'bias, ',
-            for ii in range(tt[0][0].shape[0]):
-                print >>f1, "coupling %d, " % ii,
-            print >>f1, 'exercise name'
-            for t in tt:
-                print >>f1, t[1], ',',
-                for ii in range(tt[0][0].shape[0]):
-                    print >>f1, t[0][ii], ',',
-                print >>f1, t[2]
-            f1.close()
-
-        if True:
-            # abilities update parameters
-            f1 = open("%s_resource_epoch=%d.csv" %
-             (options.output, epoch), 'w+')
-            nms = sorted(model.resource_index.keys())
-            for ii in range(model.Phi.shape[0]):
-                print >>f1, "bias%d," % (ii),
-            for ii in range(model.Phi.shape[0]):
-                for jj in range(model.Phi.shape[1]-1):
-                    print >>f1, "weight%d_%d," % (ii, jj),
-            for ii in range(model.J.shape[0]):
-                for jj in range(model.J.shape[1]):
-                    print >>f1, "J%d_%d," % (ii, jj),
-            print >>f1, "resource name"
-
-            for nm in nms:
-                Phi = model.Phi[:, :, model.resource_index[nm]]
-                J = model.J[:, :, model.resource_index[nm]]
-                for ii in range(model.Phi.shape[0]):
-                    print >>f1, Phi[ii, -1], ',',
-                for ii in range(model.Phi.shape[0]):
-                    for jj in range(model.Phi.shape[1]-1):
-                        print >>f1, Phi[ii, jj], ',',
-                for ii in range(model.J.shape[0]):
-                    for jj in range(model.J.shape[1]):
-                        print >>f1, J[ii, jj], ',',
-                print >>f1, str(nm)
 
         if False:
             # compute log likelihood
