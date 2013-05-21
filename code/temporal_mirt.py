@@ -31,6 +31,10 @@ class TMIRTResource(object):
             self.time_taken = row[idx_pl.time_taken]
             self.name = row[idx_pl.exercise]
             self.type = 'video'
+        else:
+            print "unknown resource type"
+            print row
+            raise NameError("Unknown resource type")
 
 
 class HMC(object):
