@@ -34,7 +34,7 @@ class TMIRTResource(object):
         else:
             print "unknown resource type"
             print row
-            raise NameError("Unknown resource type")
+            raise StandardError("Unknown resource type")
 
 
 class HMC(object):
@@ -162,6 +162,99 @@ class HMC(object):
             self.calc_Ev()
 
 
+
+class TMIRT_users(object):
+    """
+    Holds user history data for TMIRT.  Note that this history data is specific
+    to a single trained TMIRT object, and will not behave sensibly if used with
+    a different TMIRT object.
+    """
+
+    def __init__(self, model):
+        # the parent TMIRT model
+        self.model = model
+
+        # holds the maximum number of timesteps for any user
+        self.longest_user = 0
+        self.num_times_a = 0
+        self.num_times_x = 0
+        self.num_users = 0
+        # provides the index of the user each column in the
+        # abilities matrix a belongs to
+        self.a_to_user = []
+        # for holding exercise correctness and incorrectness
+        self.x = []
+        # holds an array of indices per key
+        self.index_lookup = defaultdict(list)
+
+
+    def increment_num_times(self, num_users):
+        self.a_to_user.append(num_users)
+        self.num_times_a += 1
+
+
+    def add_user(self, user, resources):
+        """
+        step through all the resources this user interacted with, in
+        chronological order and assign and index each time slice to a
+        column in the abilities storage matrix
+        """
+
+        self.longest_user = max(self.longest_user, len(resources)+1)
+
+        # store the starting abilities entry for this user
+        self.index_lookup['chain start'].append(self.num_times_a)
+
+        for r in resources:
+
+            idx_resource = self.model.get_resource_index(r)
+            self.index_lookup[('a pre resource', idx_resource)].append(
+                                                        self.num_times_a)
+            if r.type == 'exercise':
+                idx_exercise = self.model.get_exercise_index(r)
+                self.index_lookup[('exercise a', idx_exercise)].append(
+                                                            self.num_times_a)
+                # store the correctness value in an array
+                self.x.append(r.correct)
+                self.index_lookup[('exercise x', idx_exercise)].append(
+                                                            self.num_times_x)
+                self.num_times_x += 1
+            self.increment_num_times(self.num_users)
+            self.index_lookup[('a post resource', idx_resource)].append(
+                                                            self.num_times_a)
+
+        self.increment_num_times(self.num_users)
+
+        ## store the starting and ending abilities entry index for this user
+        #self.user_index_range.append([start_time, self.num_times_a])
+
+        self.num_users += 1
+
+
+    def finalize_users(self):
+        """
+        - Convert many python lists into numpy arrays now that we know their
+         final size.
+        - Create the data structures that hold the parameters and abilities.
+        """
+
+        # turn the index arrays into numpy arrays for later fast indexing
+        self.index_lookup = dict(self.index_lookup)
+        for k in self.index_lookup:
+            self.index_lookup[k] = np.asarray(self.index_lookup[k])
+        self.a_to_user = np.asarray(self.a_to_user)
+        #self.user_index_range = np.asarray(self.user_index_range)
+
+        # turn exercise correctness into a numpy array
+        self.x = np.asarray(self.x).T
+
+        # abilities
+        self.a = np.random.randn(self.num_abilities, self.num_times_a)
+
+
+
+
+
 # TODO(jascha) should break this apart into two classes, one to hold the model
 # and the other to hold the training data
 class TMIRT(object):
@@ -180,25 +273,13 @@ class TMIRT(object):
         # for holding indices
         self.num_exercises = 0
         self.num_resources = 0
-        self.num_times_a = 0
-        self.num_times_x = 0
-        self.num_users = 0
-        # holds the maximum number of timesteps for any user
-        self.longest_user = 0
-        # provides the index of the user each column in the
-        # abilities matrix a belongs to
-        self.a_to_user = []
         # holds a single index into the parameter tensors per key, where a key
         # is a unique identifier for a resource or exercise
         self.resource_index = {}
         self.exercise_index = {}
-        # holds an array of indices per key
-        self.index_lookup = defaultdict(list)
 
-        # for holding exercise correctness and incorrectness
-        self.x = []
+        self.users = TMIRT_users(self)
 
-        self.sampler = None
 
     def get_resource_index(self, resource):
         """
@@ -280,7 +361,7 @@ class TMIRT(object):
         reasonable sampling step size the answer would be none of them.)
         """
 
-        E = np.zeros((self.num_users))
+        E = np.zeros((self.users.num_users))
 
         # we can't do this directly, because Python indexing doesn't handle
         # incrementing the way we would like when the same index occurs
@@ -290,9 +371,9 @@ class TMIRT(object):
         # set the stride long enough the same index never occurs twice in the
         # same indexing array on the left side of the assignment
         # (remembering that idx_pre is sorted)
-        for ii in range(self.longest_user):
-            E[self.a_to_user[idx_pre[ii::self.longest_user]]] \
-                += E_sub[ii::self.longest_user]
+        for ii in range(self.users.longest_user):
+            E[self.users.a_to_user[idx_pre[ii::self.users.longest_user]]] \
+                += E_sub[ii::self.users.longest_user]
 
         # DEBUG
         #for ii in range(E_sub.shape[0]):
@@ -302,16 +383,16 @@ class TMIRT(object):
 
     def E_chain_start(self):
         """ the energy contribution from t=1 (before any resource) per user """
-        idx = self.index_lookup['chain start']
-        a = self.a[:, idx]
+        idx = self.users.index_lookup['chain start']
+        a = self.users.a[:, idx]
         E = 0.5 * np.sum(a**2, axis=0)
         E = self.map_energy_abilities_to_users(E, idx)
         return E
 
     def dEda_accumulate_chain_start(self, da):
         """ the energy contribution from t=1 (before any resource) per user """
-        idx = self.index_lookup['chain start']
-        a = self.a[:, idx]
+        idx = self.users.index_lookup['chain start']
+        a = self.users.a[:, idx]
         da[:,idx] += a
         return da
 
@@ -396,10 +477,10 @@ class TMIRT(object):
     def get_exercise_matrices(self, idx_exercise):
         # TODO (eliana): This fails when there's only one example of a given
         # exercise so it's never pre or something
-        idx_x = self.index_lookup[('exercise x', idx_exercise)]
-        idx_a = self.index_lookup[('exercise a', idx_exercise)]
-        x = self.x[:, idx_x]
-        a = self.a[:, idx_a]
+        idx_x = self.users.index_lookup[('exercise x', idx_exercise)]
+        idx_a = self.users.index_lookup[('exercise a', idx_exercise)]
+        x = self.users.x[:, idx_x]
+        a = self.users.a[:, idx_a]
         # add on a unit to act as a bias
         a = np.vstack((a, np.ones((1, a.shape[1]))))
 
@@ -414,10 +495,10 @@ class TMIRT(object):
         # get the pre and post abilities matrices that correspond to this
         # resource
 
-        idx_pre = self.index_lookup[('a pre resource', idx_resource)]
-        idx_post = self.index_lookup[('a post resource', idx_resource)]
-        a_pre = self.a[:, idx_pre]
-        a_post = self.a[:, idx_post]
+        idx_pre = self.users.index_lookup[('a pre resource', idx_resource)]
+        idx_post = self.users.index_lookup[('a post resource', idx_resource)]
+        a_pre = self.users.a[:, idx_pre]
+        a_post = self.users.a[:, idx_post]
         # add on a unit to act as a bias
         a_pre = np.vstack((a_pre, np.ones((1, a_pre.shape[1]))))
         # get the parameters for this resource
@@ -433,9 +514,11 @@ class TMIRT(object):
         accumulate the energy for each user
         """
 
+        # TODO(jascha) is this ever called with a not equal None?
+        # (leftover from Gaussian diffusion sampling?)
         if a is not None:
-            a_old = self.a
-            self.a = a
+            a_old = self.users.a
+            self.users.a = a
 
         E = 0.
         E += self.E_chain_start()
@@ -445,7 +528,7 @@ class TMIRT(object):
             E += self.E_exercise(idx_exercise)
 
         if a is not None:
-            self.a = a_old
+            self.users.a = a_old
 
         return E
 
@@ -458,7 +541,7 @@ class TMIRT(object):
         # calculate the energy
         E = self.E()
 
-        da = np.zeros(self.a.shape)
+        da = np.zeros(self.users.a.shape)
         self.dEda_accumulate_chain_start(da)
         for idx_resource in range(self.num_resources):
             self.dEda_accumulate_resource(idx_resource, da)
@@ -493,80 +576,6 @@ class TMIRT(object):
 
         return E/self.num_users, dE/self.num_users
 
-    def increment_num_times(self, num_users):
-        self.a_to_user.append(num_users)
-        self.num_times_a += 1
-
-    def add_user(self, user, resources):
-        """
-        step through all the resources this user interacted with, in
-        chronological order and assign and index each time slice to a
-        column in the abilities storage matrix
-        """
-
-        self.longest_user = max(self.longest_user, len(resources)+1)
-
-        # store the starting abilities entry for this user
-        self.index_lookup['chain start'].append(self.num_times_a)
-
-        for r in resources:
-
-            idx_resource = self.get_resource_index(r)
-            self.index_lookup[('a pre resource', idx_resource)].append(
-                                                        self.num_times_a)
-            if r.type == 'exercise':
-                idx_exercise = self.get_exercise_index(r)
-                self.index_lookup[('exercise a', idx_exercise)].append(
-                                                            self.num_times_a)
-                # store the correctness value in an array
-                self.x.append(r.correct)
-                self.index_lookup[('exercise x', idx_exercise)].append(
-                                                            self.num_times_x)
-                self.num_times_x += 1
-            self.increment_num_times(self.num_users)
-            self.index_lookup[('a post resource', idx_resource)].append(
-                                                            self.num_times_a)
-
-        self.increment_num_times(self.num_users)
-
-        ## store the starting and ending abilities entry index for this user
-        #self.user_index_range.append([start_time, self.num_times_a])
-
-        self.num_users += 1
-
-    def finalize_training_data(self):
-        """
-        - Convert many python lists into numpy arrays now that we know their
-         final size.
-        - Create the data structures that hold the parameters and abilities.
-        """
-
-        # turn the index arrays into numpy arrays for later fast indexing
-        self.index_lookup = dict(self.index_lookup)
-        for k in self.index_lookup:
-            self.index_lookup[k] = np.asarray(self.index_lookup[k])
-        self.a_to_user = np.asarray(self.a_to_user)
-        #self.user_index_range = np.asarray(self.user_index_range)
-
-        # turn exercise correctness into a numpy array
-        self.x = np.asarray(self.x).T
-
-        # abilities
-        self.a = np.random.randn(self.num_abilities, self.num_times_a)
-        # parameters
-        self.Phi = np.zeros((self.num_abilities,
-                             self.num_abilities + 1, self.num_resources))
-        self.J = np.tile(np.eye(self.num_abilities).reshape(
-                                (self.num_abilities, self.num_abilities, 1)),
-                                (1, 1, self.num_resources)) * 10
-        self.W_exercise_correct = np.random.randn(self.num_exercises,
-                                    self.num_abilities + 1)/np.sqrt(self.num_abilities)
-        self.W_exercise_logtime = np.zeros((self.num_exercises,
-                                    self.num_abilities + 1))
-        # exact zeros cause problems for sparse matrices
-        self.J += np.random.randn(*self.J.shape)*1e-10
-        self.Phi += np.random.randn(*self.Phi.shape)*1e-10
-
 
     def invsqrtm(self, W):
         """
@@ -581,7 +590,7 @@ class TMIRT(object):
         # number of terms to use in the Taylor series.  increase to get a more
         # accurate approximation.
         # DEBUG -- this is purely heuristic!
-        nterms = self.longest_user*10
+        nterms = self.users.longest_user*10
 
         # DEBUG experiment with different sparse matrix types.
         # eg, make sure these aren't LIL, which is slower.
@@ -616,7 +625,7 @@ class TMIRT(object):
 
     def get_joint_gaussian_covariance_bias(self):
 
-        full_J = np.zeros((self.num_times_a, self.num_abilities))
+        full_J = np.zeros((self.users.num_times_a, self.num_abilities))
 
         for idx_resource in range(self.num_resources):
             idx_pre, idx_post, a_pre, a_post, a_err, J = \
@@ -631,7 +640,7 @@ class TMIRT(object):
             full_J[idx_pre,  :] += np.diag(Jpre)
 
         # and the univariate Gaussian over the initial state
-        idx_start = self.index_lookup['chain start']
+        idx_start = self.users.index_lookup['chain start']
         full_J[idx_start, :] += 1.
 
 #        W = sparse.lil_matrix(
@@ -646,7 +655,7 @@ class TMIRT(object):
         W = full_J.ravel()**(-1./4.)
 
         # TODO(jascha) set full_bias
-        full_bias = np.zeros((self.num_times_a, self.num_abilities))
+        full_bias = np.zeros((self.users.num_times_a, self.num_abilities))
 
         return W, full_bias
 
@@ -655,9 +664,9 @@ class TMIRT(object):
 
         # full ability to ability coupling matrix
         full_J = sparse.lil_matrix(
-           (self.num_times_a*self.num_abilities, self.num_times_a*self.num_abilities))
+           (self.users.num_times_a*self.num_abilities, self.users.num_times_a*self.num_abilities))
         # full abilities bias vector
-        full_bias = sparse.lil_matrix((self.num_times_a, self.num_abilities))
+        full_bias = sparse.lil_matrix((self.users.num_times_a, self.num_abilities))
 
         # accumulate terms in the coupling matrix and bias vector for all resources
         for idx_resource in range(self.num_resources):
@@ -745,3 +754,27 @@ class TMIRT(object):
             E_current[:, update_idx] = E_proposed[:, update_idx]
 
         return E_current
+
+    def finalize_training_data(self):
+        """
+        - Convert many python lists into numpy arrays now that we know their
+         final size.
+        - Create the data structures that hold the parameters and abilities.
+        """
+
+        users.finalize_users()
+
+        # parameters
+        self.Phi = np.zeros((self.num_abilities,
+                             self.num_abilities + 1, self.num_resources))
+        self.J = np.tile(np.eye(self.num_abilities).reshape(
+                                (self.num_abilities, self.num_abilities, 1)),
+                                (1, 1, self.num_resources)) * 10
+        self.W_exercise_correct = np.random.randn(self.num_exercises,
+                                    self.num_abilities + 1)/np.sqrt(self.num_abilities)
+        self.W_exercise_logtime = np.zeros((self.num_exercises,
+                                    self.num_abilities + 1))
+        # exact zeros cause problems for sparse matrices
+        self.J += np.random.randn(*self.J.shape)*1e-10
+        self.Phi += np.random.randn(*self.Phi.shape)*1e-10
+
