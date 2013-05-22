@@ -16,13 +16,13 @@ def plot_learning_trajectories(tmirt, num_trajectories=25, min_length=10, use_ti
     num_plotted = 0
 
     while num_plotted < num_trajectories:
-        user_i = np.random.randint(tmirt.num_users)
-        idx = np.nonzero((tmirt.a_to_user.reshape((-1)) == user_i))[0]
+        user_i = np.random.randint(tmirt.users.num_users)
+        idx = np.nonzero((tmirt.users.a_to_user.reshape((-1)) == user_i))[0]
         if idx.shape[0] > min_length:
-            y = tmirt.a[0, idx]
+            y = tmirt.users.a[0, idx]
             plt.ylabel('a[0]')
             if tmirt.num_abilities > 1 and not use_time:
-                x = tmirt.a[1, idx]
+                x = tmirt.users.a[1, idx]
                 plt.xlabel('a[1]')
             else:
                 x = np.arange(idx.shape[0])
@@ -147,7 +147,7 @@ def generate_csv_files(tmirt, fname=None):
 
 
     if fname == None:
-        fname = "abilities=%d_exercises=%d_resources=%d_users=%d"%(tmirt.num_abilities, tmirt.num_exercises, tmirt.num_resources, tmirt.num_users)
+        fname = "abilities=%d_exercises=%d_resources=%d_users=%d"%(tmirt.num_abilities, tmirt.num_exercises, tmirt.num_resources, tmirt.users.num_users)
 
 
     ## resource eigenvalue view
