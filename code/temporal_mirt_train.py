@@ -129,7 +129,7 @@ def load_data(options):
             if user != prev_user and len(resources) > 0:
                 # We're getting a new user, so perform the reduce operation
                 # on our previous user
-                model.add_user(user, resources)
+                model.users.add_user(user, resources)
                 resources = []
             prev_user = user
             if row[idx_pl.rowtype] == 'problemlog':
@@ -144,7 +144,7 @@ def load_data(options):
 
         if len(resources) > 0:
             # flush the data for the final user, too
-            model.add_user(user, resources)
+            model.users.add_user(user, resources)
             resources = []
 
         fileinput.close()
@@ -203,12 +203,10 @@ def check_gradients_M_step():
     random.shuffle(test_order)
     for ind in test_order:
         if ind < Phi_l:
-            #continue
             print "Phi",
         elif ind < Phi_l+J_l:
             print "J",
         elif ind < Phi_l+J_l+W_ex_cr_l:
-            #continue
             print "W",
         else:
             print "broken mapping to parameters"
@@ -245,11 +243,11 @@ def main():
             epsilon=options.sampling_epsilon)
 
         print >>sys.stderr, "E log L %f, " % (
-                -np.sum(E_samples) / model.num_users / np.log(2.)),
+                -np.sum(E_samples) / model.users.num_users / np.log(2.)),
 
         # debugging info -- accumulate mean and covariance of abilities vector
-        mn_a = np.mean(model.a, axis=1)
-        cov_a = np.mean(model.a**2, axis=1)
+        mn_a = np.mean(model.users.a, axis=1)
+        cov_a = np.mean(model.users.a**2, axis=1)
         print >>sys.stderr, "<abilities>", mn_a,
         print >>sys.stderr, ", <abilities^2>", cov_a, ", ",
 

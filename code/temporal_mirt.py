@@ -53,7 +53,7 @@ class HMC(object):
         holds all the parameters which are updated by the sampler
         """
         def __init__(self, parent):
-            self.a = parent.model.a.copy()
+            self.a = parent.model.users.a.copy()
             self.v = parent.v.copy()
             self.E = parent.E.copy()
             self.Ev = parent.Ev.copy()
@@ -68,23 +68,23 @@ class HMC(object):
 
             if idx == None:
                 #idx = np.asarray(range(self.E.shape[0]))
-                idx_a = np.arange(parent.model.a.shape[1], dtype=int)
+                idx_a = np.arange(parent.model.users.a.shape[1], dtype=int)
             else:
                 if idx.shape[0] == 0:
                     # nothing to do
                     return
                 # the indices into the abilities matrix corresponding to these
                 # users
-                compare = np.zeros((np.prod(parent.model.a_to_user.shape)), dtype=bool)
+                compare = np.zeros((np.prod(parent.model.users.a_to_user.shape)), dtype=bool)
                 for ii in idx:
                     #print ii
                     #print parent.model.a_to_user.shape
                     #print compare.shape
                     #print np.prod(parent.model.a_to_user.shape)
-                    compare += (parent.model.a_to_user.reshape((-1)) == ii)
+                    compare += (parent.model.users.a_to_user.reshape((-1)) == ii)
                 idx_a = np.nonzero(compare)[0]
 
-            parent.model.a[:,idx_a] = self.a[:,idx_a].copy()
+            parent.model.users.a[:,idx_a] = self.a[:,idx_a].copy()
             parent.v[:,idx_a] = self.v[:,idx_a].copy()
             parent.Ev[idx] = self.Ev[idx]
             parent.E[idx] = self.E[idx]
@@ -96,7 +96,7 @@ class HMC(object):
         self.epsilon = epsilon
         self.L = L
         self.beta = beta
-        self.v = np.random.randn(model.a.shape[0], model.a.shape[1])
+        self.v = np.random.randn(model.users.a.shape[0], model.users.a.shape[1])
         self.E, self.dE = model.E_dE_abilities()
         self.calc_Ev()
 
@@ -109,7 +109,7 @@ class HMC(object):
 
     def leapfrog(self):
         """ integrate leapfrog dynamics for self.L steps """
-        a_shape = self.model.a.shape
+        a_shape = self.model.users.a.shape
 
         for _ in range(self.L):
             # initial half step
@@ -118,7 +118,7 @@ class HMC(object):
             self.v -= (self.epsilon * self.dE.reshape((-1))).reshape(a_shape)/2.
             # full step in position
             #self.model.a += self.epsilon.T.dot(self.v.reshape((-1,1))).reshape(a_shape)
-            self.model.a += (self.epsilon * self.v.reshape((-1))).reshape(a_shape)
+            self.model.users.a += (self.epsilon * self.v.reshape((-1))).reshape(a_shape)
             self.E, self.dE = self.model.E_dE_abilities()
             # final half step
             #self.v -= self.epsilon.dot(self.dE.reshape((-1,1))).reshape(a_shape)/2.
@@ -249,7 +249,7 @@ class TMIRT_users(object):
         self.x = np.asarray(self.x).T
 
         # abilities
-        self.a = np.random.randn(self.num_abilities, self.num_times_a)
+        self.a = np.random.randn(self.model.num_abilities, self.num_times_a)
 
 
 
@@ -278,6 +278,10 @@ class TMIRT(object):
         self.resource_index = {}
         self.exercise_index = {}
 
+        self.reset_users()
+
+
+    def reset_users(self):
         self.users = TMIRT_users(self)
 
 
@@ -574,7 +578,7 @@ class TMIRT(object):
 
         dE = np.concatenate((dPhi.flat, dJ.flat, dW_exercise_correct.flat))
 
-        return E/self.num_users, dE/self.num_users
+        return E/self.users.num_users, dE/self.users.num_users
 
 
     def invsqrtm(self, W):
@@ -643,15 +647,6 @@ class TMIRT(object):
         idx_start = self.users.index_lookup['chain start']
         full_J[idx_start, :] += 1.
 
-#        W = sparse.lil_matrix(
-#           (self.num_times_a*self.num_abilities, self.num_times_a*self.num_abilities))
-#
-#        # DEBUG
-#        #W.setdiag(1. / np.sqrt(full_J.ravel()))
-#        W.setdiag(full_J.ravel()**(-1./4.))
-#
-#        W = W.tocsr()
-
         W = full_J.ravel()**(-1./4.)
 
         # TODO(jascha) set full_bias
@@ -682,7 +677,7 @@ class TMIRT(object):
         - Create the data structures that hold the parameters and abilities.
         """
 
-        users.finalize_users()
+        self.users.finalize_users()
 
         # parameters
         self.Phi = np.zeros((self.num_abilities,
