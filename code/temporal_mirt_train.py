@@ -126,7 +126,7 @@ def load_data(options):
             # the user and timestamp are shared by all row types.
             # load the user
             user = row[idx_pl.user]
-            if user != prev_user and len(resources) > 0:
+            if user != prev_user and len(resources) > 1:
                 # We're getting a new user, so perform the reduce operation
                 # on our previous user
                 model.users.add_user(user, resources)
@@ -142,7 +142,7 @@ def load_data(options):
                 row[idx_pl.time_taken] = float(row[idx_pl.time_taken])
             resources.append(TMIRTResource(row, idx_pl))
 
-        if len(resources) > 0:
+        if len(resources) > 1:
             # flush the data for the final user, too
             model.users.add_user(user, resources)
             resources = []
