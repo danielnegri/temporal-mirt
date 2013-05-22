@@ -659,50 +659,6 @@ class TMIRT(object):
 
         return W, full_bias
 
-        # TODO(jascha)  sparse matrices suck in python!! the below code is insanely slow.
-        # figure out a way to make them suck less, or to not use them.
-
-        # full ability to ability coupling matrix
-        full_J = sparse.lil_matrix(
-           (self.users.num_times_a*self.num_abilities, self.users.num_times_a*self.num_abilities))
-        # full abilities bias vector
-        full_bias = sparse.lil_matrix((self.users.num_times_a, self.num_abilities))
-
-        # accumulate terms in the coupling matrix and bias vector for all resources
-        for idx_resource in range(self.num_resources):
-            idx_pre, idx_post, a_pre, a_post, a_err, J = \
-                self.get_abilities_matrices(idx_resource)
-            Phi = self.Phi[:, :, idx_resource]
-            phi_m = Phi[:,:-1] # no bias
-            phi_b = Phi[:,[-1]] # bias only
-            Jpre = np.dot(phi_m.T, np.dot(J, phi_m))
-            Jcross = np.dot(J, phi_m)
-
-            print idx_resource, idx_pre.shape, idx_post.shape
-
-
-            # TODO these loops are horribly inefficient!  some kind of wrapper for
-            # N-d sparse matrices?  Expanding the idx arrays?
-            for ai in range(self.num_abilities):
-                for aj in range(self.num_abilities):
-                    # python defaults to row major indexing
-                    full_J[idx_post + self.num_times_a+ai, idx_post + self.num_times_a+aj] += J[ai,aj]*np.ones((len(idx_post)))
-                    full_J[idx_pre + self.num_times_a+ai, idx_pre + self.num_times_a+aj] += Jpre[ai,aj]*np.ones((len(idx_pre)))
-                    full_J[idx_post + self.num_times_a+ai, idx_pre + self.num_times_a+aj] += Jcross[ai,aj]*np.ones((len(idx_post)))
-                    full_J[idx_pre + self.num_times_a+ai,idx_post + self.num_times_a+aj] += Jcross.T[ai,aj]*np.ones((len(idx_pre)))
-            # DEBUG check for factor of 2
-            full_bias[idx_post,:] += (np.dot(J, phi_b)).T
-            full_bias[idx_pre,:] += (np.dot(phi_m.T, np.dot(J, phi_b))).T
-
-        # TODO convert from LIL to ?
-
-
-        W = invsqrtm(full_J)
-        # DEBUG(jascha) haven't checked this bias is correct, but not yet using it 
-        # for anything.
-        full_bias = W.dot(W.dot(full_bias))
-        return W, full_bias
-
 
     def sample_abilities_HMC_natgrad(self,num_steps=1e3,epsilon=0.1,L=10,beta=0.5):
 
@@ -718,42 +674,6 @@ class TMIRT(object):
         sampler.sample(N=num_steps)
 
         return sampler.E
-
- 
-    def sample_abilities_diffusion(self, num_steps=1e4, epsilon=None):
-
-        if epsilon is None:
-            epsilon = (0.1 / np.sqrt(self.num_abilities)) / \
-                    np.sqrt(self.longest_user)
-
-        # calculate the energy for the initialization state
-        E_current = self.E()
-        for i in range(num_steps):
-            # generate the proposal state
-            a_proposed = self.a + epsilon * np.random.randn(self.num_abilities,
-                                                            self.num_times_a)
-
-            E_proposed = self.E(a=a_proposed)
-
-            # this is required to avoid overflow when E_abilities - E_proposal
-            # is very large
-            idx = E_current > E_proposed
-            E_current[idx] = E_proposed[idx]
-
-            # probability of accepting proposal
-            p_accept = np.exp(E_current - E_proposed)
-
-            if np.mean(p_accept) < 0.1:
-                print >>sys.stderr, "low sampling accept rate mean", np.mean(p_accept), "by sample", p_accept
-
-            #assert np.isfinite(E_proposed), "non-finite proposal energy"
-
-            pcmp = np.random.rand(p_accept.shape[0], 1).reshape(p_accept.shape)
-            update_idx = np.nonzero(p_accept > pcmp)[0]
-            self.a[:, update_idx] = a_proposed[:, update_idx]
-            E_current[:, update_idx] = E_proposed[:, update_idx]
-
-        return E_current
 
     def finalize_training_data(self):
         """
