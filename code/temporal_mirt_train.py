@@ -270,6 +270,7 @@ def main():
                 np.sqrt(np.sum((new_theta - old_theta) ** 2)))
 
         # save state as a .npz
+        # TODO(jascha) can delete model.users when saving to save space
         np.savez("%s_epoch=%d.npz" % (options.output, epoch),
                  tmirt=model)
 

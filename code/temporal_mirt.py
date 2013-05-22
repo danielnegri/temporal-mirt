@@ -223,11 +223,11 @@ class TMIRT_users(object):
             self.index_lookup[('a post resource', idx_resource)].append(
                                                             self.num_times_a)
 
+        # store the ending abilities entry for this user
+        self.index_lookup['chain end'].append(self.num_times_a)
+
+        # and move on to the next user
         self.increment_num_times(self.num_users)
-
-        ## store the starting and ending abilities entry index for this user
-        #self.user_index_range.append([start_time, self.num_times_a])
-
         self.num_users += 1
 
 
@@ -265,6 +265,14 @@ class TMIRT(object):
       - The functions for evaluating the model energy and gradients
         for those users.
       - The function for sampling the abilities.
+
+    To evaluate model on new data:
+        call reset_users() to clear old user data
+        call users.add_user() for each user history you wish to add
+        call users.finalize_users() when all users have been added
+        call sample_abilities_HMC_natgrad() to sample abilities estimates
+        call predict_performance() to return a matrix of the predicted performance
+            of every user on every exercise
     """
 
     def __init__(self, num_abilities):
@@ -279,6 +287,26 @@ class TMIRT(object):
         self.exercise_index = {}
 
         self.reset_users()
+
+
+    def predict_performance(self):
+        """
+        Returns a matrix of the predicted performance of every user on every exercise.
+
+        Exercises are sorted in the order of their index, as provided by exercise_index.
+        Users are sorted by the order in which they were added.
+        """
+
+        # get the most recent abilities vector for each student
+        a = self.users.a[:, self.users.index_lookup['chain end']]
+        # add on a unit to act as a bias
+        a = np.vstack((a, np.ones((1, a.shape[1]))))
+
+        Wa = np.dot(self.W_exercise_correct, a)
+
+        p_pred = 1./(1. + np.exp(-Wa))
+
+        return p_pred
 
 
     def reset_users(self):
