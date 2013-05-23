@@ -1,9 +1,6 @@
 import numpy as np
-from scipy import sparse
 import scipy.special
-import accuracy_model_util as acc_util
 from collections import defaultdict
-import sys
 
 
 class TMIRTResource(object):
@@ -59,6 +56,7 @@ class HMC(object):
             self.Ev = parent.Ev.copy()
             self.dE = parent.dE.copy()
             self.parent = parent
+
         def apply_state(self, idx=None):
             """
             set the current state of the sampler/model to this state, for the
@@ -66,7 +64,7 @@ class HMC(object):
             """
             parent = self.parent
 
-            if idx == None:
+            if idx is None:
                 #idx = np.asarray(range(self.E.shape[0]))
                 idx_a = np.arange(parent.model.users.a.shape[1], dtype=int)
             else:
@@ -75,37 +73,38 @@ class HMC(object):
                     return
                 # the indices into the abilities matrix corresponding to these
                 # users
-                compare = np.zeros((np.prod(parent.model.users.a_to_user.shape)), dtype=bool)
+                compare = np.zeros((
+                    np.prod(parent.model.users.a_to_user.shape)), dtype=bool)
                 for ii in idx:
                     #print ii
                     #print parent.model.a_to_user.shape
                     #print compare.shape
                     #print np.prod(parent.model.a_to_user.shape)
-                    compare += (parent.model.users.a_to_user.reshape((-1)) == ii)
+                    compare += (
+                        parent.model.users.a_to_user.reshape((-1)) == ii)
                 idx_a = np.nonzero(compare)[0]
 
-            parent.model.users.a[:,idx_a] = self.a[:,idx_a].copy()
-            parent.v[:,idx_a] = self.v[:,idx_a].copy()
+            parent.model.users.a[:, idx_a] = self.a[:, idx_a].copy()
+            parent.v[:, idx_a] = self.v[:, idx_a].copy()
             parent.Ev[idx] = self.Ev[idx]
             parent.E[idx] = self.E[idx]
-            parent.dE[:,idx_a] = self.dE[:,idx_a]
-
+            parent.dE[:, idx_a] = self.dE[:, idx_a]
 
     def __init__(self, model, epsilon=0.1, L=10, beta=0.5):
         self.model = model
         self.epsilon = epsilon
         self.L = L
         self.beta = beta
-        self.v = np.random.randn(model.users.a.shape[0], model.users.a.shape[1])
+        self.v = np.random.randn(
+            model.users.a.shape[0], model.users.a.shape[1])
         self.E, self.dE = model.E_dE_abilities()
         self.calc_Ev()
-
 
     def calc_Ev(self):
         """ calculate the momentum contribution to the energy """
         idx_pre = np.arange(self.v.shape[1], dtype=int)
-        self.Ev = self.model.map_energy_abilities_to_users(np.sum(0.5 * self.v**2, axis=0), idx_pre)
-
+        self.Ev = self.model.map_energy_abilities_to_users(
+            np.sum(0.5 * self.v**2, axis=0), idx_pre)
 
     def leapfrog(self):
         """ integrate leapfrog dynamics for self.L steps """
@@ -113,16 +112,15 @@ class HMC(object):
 
         for _ in range(self.L):
             # initial half step
-            #self.v -= np.dot(self.epsilon, self.dE.reshape((-1,1))).reshape(a_shape)/2.
-            #self.v -= self.epsilon.dot(self.dE.reshape((-1,1))).reshape(a_shape)/2.
-            self.v -= (self.epsilon * self.dE.reshape((-1))).reshape(a_shape)/2.
+            self.v -= (
+                self.epsilon * self.dE.reshape((-1))).reshape(a_shape)/2.
             # full step in position
-            #self.model.a += self.epsilon.T.dot(self.v.reshape((-1,1))).reshape(a_shape)
-            self.model.users.a += (self.epsilon * self.v.reshape((-1))).reshape(a_shape)
+            self.model.users.a += (
+                self.epsilon * self.v.reshape((-1))).reshape(a_shape)
             self.E, self.dE = self.model.E_dE_abilities()
             # final half step
-            #self.v -= self.epsilon.dot(self.dE.reshape((-1,1))).reshape(a_shape)/2.
-            self.v -= (self.epsilon * self.dE.reshape((-1))).reshape(a_shape)/2.
+            self.v -= (
+                self.epsilon * self.dE.reshape((-1))).reshape(a_shape)/2.
 
         # flip the momentum
         self.v = -self.v
@@ -130,20 +128,24 @@ class HMC(object):
         # add the momentum terms to the energy
         self.calc_Ev()
 
-
     def sample(self, N=1):
         """ run N steps of Hamiltonian Monte Carlo sampling """
         nacc = 0
         nrej = 0
         for nn in range(N):
-            print "sample step %d, acc %d, rej %d, E(x) %g, E(v) %g, E(x) + E(v) %g"%(nn, nacc, nrej, np.mean(self.E), np.mean(self.Ev), np.mean(self.E)+np.mean(self.Ev))
+            print (
+                "sample step %d, acc %d, rej %d, E(x) %g, E(v) %g,"
+                " E(x) + E(v) %g" % (nn, nacc, nrej, np.mean(self.E),
+                np.mean(self.Ev), np.mean(self.E)
+                + np.mean(self.Ev)))
             Sinit = self.state(self)
             self.leapfrog()
             Sleap = self.state(self)
             # calculate the acceptance probabilty for each user
             p_acc = np.exp(Sinit.E - Sleap.E + Sinit.Ev - Sleap.Ev)
             # set the rejected updates back to their original value
-            bd = np.nonzero(p_acc < np.random.rand(self.E.shape[0],1).ravel())[0]
+            bd = np.nonzero(
+                p_acc < np.random.rand(self.E.shape[0], 1).ravel())[0]
 
             #bd = np.nonzero(Sinit.E < np.inf)[0] # DEBUG
 
@@ -155,12 +157,16 @@ class HMC(object):
             nacc += self.E.shape[0] - bd.shape[0]
 
             #self.calc_Ev() # DEBUG
-            print "sample step %d, acc %d, rej %d, E(x) %g, E(v) %g, E(x) + E(v) %g"%(nn, nacc, nrej, np.mean(self.E), np.mean(self.Ev), np.mean(self.E)+np.mean(self.Ev))
+            print (
+                "sample step %d, acc %d, rej %d, E(x) %g, E(v) %g, "
+                "E(x) + E(v) %g" % (nn, nacc, nrej, np.mean(self.E),
+                np.mean(self.Ev), np.mean(self.E)+np.mean(self.Ev)))
             # corrupt the momentum with noise
-            self.v = np.sqrt(1.-self.beta)*self.v + np.sqrt(self.beta)*np.random.randn(self.v.shape[0],self.v.shape[1])
+            self.v = (
+                np.sqrt(1.-self.beta)*self.v + np.sqrt(self.beta) *
+                np.random.randn(self.v.shape[0], self.v.shape[1]))
             # update the momentum contribution to the energy
             self.calc_Ev()
-
 
 
 class TMIRT_users(object):
@@ -187,11 +193,9 @@ class TMIRT_users(object):
         # holds an array of indices per key
         self.index_lookup = defaultdict(list)
 
-
     def increment_num_times(self, num_users):
         self.a_to_user.append(num_users)
         self.num_times_a += 1
-
 
     def add_user(self, user, resources):
         """
@@ -230,7 +234,6 @@ class TMIRT_users(object):
         self.increment_num_times(self.num_users)
         self.num_users += 1
 
-
     def finalize_users(self):
         """
         - Convert many python lists into numpy arrays now that we know their
@@ -252,9 +255,6 @@ class TMIRT_users(object):
         self.a = np.random.randn(self.model.num_abilities, self.num_times_a)
 
 
-
-
-
 # TODO(jascha) should break this apart into two classes, one to hold the model
 # and the other to hold the training data
 class TMIRT(object):
@@ -271,8 +271,8 @@ class TMIRT(object):
         call users.add_user() for each user history you wish to add
         call users.finalize_users() when all users have been added
         call sample_abilities_HMC_natgrad() to sample abilities estimates
-        call predict_performance() to return a matrix of the predicted performance
-            of every user on every exercise
+        call predict_performance() to return a matrix of the predicted
+        performance of every user on every exercise
     """
 
     def __init__(self, num_abilities):
@@ -288,13 +288,12 @@ class TMIRT(object):
 
         self.reset_users()
 
-
     def predict_performance(self):
         """
-        Returns a matrix of the predicted performance of every user on every exercise.
-
-        Exercises are sorted in the order of their index, as provided by exercise_index.
-        Users are sorted by the order in which they were added.
+        Returns a matrix of the predicted performance of every user on every
+        exercise.
+        Exercises are sorted in the order of their index, as provided by
+        exercise_index. Users are sorted by the order in which they were added.
         """
 
         # get the most recent abilities vector for each student
@@ -308,10 +307,11 @@ class TMIRT(object):
 
         return p_pred
 
-
     def reset_users(self):
         self.users = TMIRT_users(self)
 
+    def finalize_users(self):
+        self.users.finalize_users()
 
     def get_resource_index(self, resource):
         """
@@ -425,7 +425,7 @@ class TMIRT(object):
         """ the energy contribution from t=1 (before any resource) per user """
         idx = self.users.index_lookup['chain start']
         a = self.users.a[:, idx]
-        da[:,idx] += a
+        da[:, idx] += a
         return da
 
     def E_exercise(self, idx_exercise):
@@ -457,7 +457,7 @@ class TMIRT(object):
         expxWa = np.exp(-x*(Wa))
         term1 = (-1./(1. + expxWa)*expxWa*x)
         W = self.W_exercise_correct[idx_exercise, :-1]
-        da[:,idx_a] += np.dot(W.reshape((-1,1)), term1.reshape((1,-1)))
+        da[:, idx_a] += np.dot(W.reshape((-1, 1)), term1.reshape((1, -1)))
 
     def E_resource(self, idx_resource):
         """
@@ -474,21 +474,21 @@ class TMIRT(object):
 
         # NOTE adjacent columns in a are coupled, and that
         # coupling energy is only assigned to one of the columns, so it's
-        # dangerous to think of the energy here as corresponding to a single column
-        # of a
+        # dangerous to think of the energy here as corresponding to a single
+        # column of a
 
         E = self.map_energy_abilities_to_users(E, idx_pre)
 
         return E
-
 
     def dEda_accumulate_resource(self, idx_resource, da):
         idx_pre, idx_post, a_pre, a_post, a_err, J = \
                 self.get_abilities_matrices(idx_resource)
         Phi = self.Phi[:, :, idx_resource]
 
-        da[:,idx_pre] += -np.dot(Phi.T, np.dot(J, a_err))[:-1, :] - np.dot(J, a_err)
-        da[:,idx_post] += np.dot(J, a_err)
+        da[:, idx_pre] += (
+            -np.dot(Phi.T, np.dot(J, a_err))[:-1, :] - np.dot(J, a_err))
+        da[:, idx_post] += np.dot(J, a_err)
 
     def dEdPhi_resource(self, idx_resource):
         idx_pre, idx_post, a_pre, a_post, a_err, J = \
@@ -564,7 +564,6 @@ class TMIRT(object):
 
         return E
 
-
     def E_dE_abilities(self):
         """
         Return the energy per user and the energy gradient with respect
@@ -608,13 +607,12 @@ class TMIRT(object):
 
         return E/self.users.num_users, dE/self.users.num_users
 
-
     def invsqrtm(self, W):
         """
         Numpy/scipy only has limited support for sparse matrices, so we're
         rolling our own function for matrix^(-1/2), using the Taylor
         expansion.
-        If we weren't scaling by "mn" below, this would only be valid if all the
+        If we weren't scaling by "mn" below, this would only be valid if all
         eigenvalues of W had magnitude less than 1.  With the scaling, we need
         all the eigenvalues of W/mn to have magnitude less than 1.
         """
@@ -628,7 +626,9 @@ class TMIRT(object):
         # eg, make sure these aren't LIL, which is slower.
 
         # A will accumulate the output
-        A = scipy.special.binom(-0.5, 0)*scipy.sparse.eye(W.shape[0], W.shape[1])
+        A = (
+            scipy.special.binom(-0.5, 0) *
+            scipy.sparse.eye(W.shape[0], W.shape[1]))
         # B will accumulate the powers of (W-I)
         B = scipy.sparse.eye(W.shape[0], W.shape[1])
 
@@ -654,7 +654,6 @@ class TMIRT(object):
 
         return A
 
-
     def get_joint_gaussian_covariance_bias(self):
 
         full_J = np.zeros((self.users.num_times_a, self.num_abilities))
@@ -663,13 +662,13 @@ class TMIRT(object):
             idx_pre, idx_post, a_pre, a_post, a_err, J = \
                 self.get_abilities_matrices(idx_resource)
             Phi = self.Phi[:, :, idx_resource]
-            phi_m = Phi[:,:-1] # no bias
-            phi_b = Phi[:,[-1]] # bias only
+            phi_m = Phi[:, :-1]  # no bias
+            # phi_b = Phi[:, [-1]]  # bias only
             Jpre = np.dot(phi_m.T, np.dot(J, phi_m))
-            Jcross = np.dot(J, phi_m)
+            # Jcross = np.dot(J, phi_m)
 
             full_J[idx_post, :] += np.diag(J)
-            full_J[idx_pre,  :] += np.diag(Jpre)
+            full_J[idx_pre, :] += np.diag(Jpre)
 
         # and the univariate Gaussian over the initial state
         idx_start = self.users.index_lookup['chain start']
@@ -682,19 +681,15 @@ class TMIRT(object):
 
         return W, full_bias
 
-
-    def sample_abilities_HMC_natgrad(self,num_steps=1e3,epsilon=0.1,L=10,beta=0.5):
+    def sample_abilities_HMC_natgrad(
+            self, num_steps=1e2, epsilon=0.1, L=10, beta=0.5):
 
         # we will scale our dynamics by W (add ref)
         W, _ = self.get_joint_gaussian_covariance_bias()
         W *= epsilon
 
-        #if self.sampler == None:
-        #    self.sampler = HMC(self, epsilon=W, L=L, beta=beta)
-        #self.sampler.sample(N=num_steps)
-
         sampler = HMC(self, epsilon=W, L=L, beta=beta)
-        sampler.sample(N=num_steps)
+        sampler.sample(N=int(num_steps))
 
         return sampler.E
 
@@ -714,9 +709,9 @@ class TMIRT(object):
                                 (self.num_abilities, self.num_abilities, 1)),
                                 (1, 1, self.num_resources)) * 10
         self.W_exercise_correct = np.random.randn(self.num_exercises,
-                                    self.num_abilities + 1)/np.sqrt(self.num_abilities)
+            self.num_abilities + 1)/np.sqrt(self.num_abilities)
         self.W_exercise_logtime = np.zeros((self.num_exercises,
-                                    self.num_abilities + 1))
+            self.num_abilities + 1))
         # exact zeros cause problems for sparse matrices
         self.J += np.random.randn(*self.J.shape)*1e-10
         self.Phi += np.random.randn(*self.Phi.shape)*1e-10
