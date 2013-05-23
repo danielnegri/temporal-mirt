@@ -286,6 +286,8 @@ class TMIRT(object):
         self.resource_index = {}
         self.exercise_index = {}
 
+        self.finalized = False
+
         self.reset_users()
 
 
@@ -721,3 +723,4 @@ class TMIRT(object):
         self.J += np.random.randn(*self.J.shape)*1e-10
         self.Phi += np.random.randn(*self.Phi.shape)*1e-10
 
+        self.finalized = True
