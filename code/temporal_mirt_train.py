@@ -21,20 +21,18 @@ def get_cmd_line_arguments():
     parser = argparse.ArgumentParser(description="Train a temporal multi-dimensional item response theory (TMIRT) model.")
     parser.add_argument("-a", "--num_abilities", type=int, default=2,
            help="Number of hidden ability units.")
-    #parser.add_argument("-s", "--sampling_num_steps", type=int, default=10,
     parser.add_argument("-s", "--sampling_num_steps", type=int, default=10,
         help="Number of sampling steps to use for the E step.")
     parser.add_argument("-l", "--sampling_epsilon", type=float, default=0.1,
      help="The length scale to use for sampling update proposals.")
     parser.add_argument("-n", "--num_epochs", type=int, default=10000,
         help="The number of EM iterations to do during learning")
-    # The number of copies of the data to train on.  If there is too little
-    # training data, increase this number in order to maintain multiple samples
-    # from the abilities vector for each student.  A sign that there is too
-    # little training data is if the update step length ||dcouplings|| remains
-    # large.
     parser.add_argument("-q", "--num_replicas", type=int, default=1,
-        help="The number of copies of the data to train on.")
+        help="""The number of copies of the data to train on. If there is too little
+                training data, increase this number in order to maintain multiple samples
+                from the abilities vector for each student.  A sign that there is too
+                little training data is if the update step length ||dcouplings|| remains
+                large.""")
     parser.add_argument("-m", "--max_pass_lbfgs", type=int, default=5,
         help="The number of LBFGS descent steps to make per M step.")
     # The weight for an L2 regularizer on the parameters.  This can be very
