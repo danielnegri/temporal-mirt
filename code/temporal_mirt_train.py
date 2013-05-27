@@ -17,8 +17,11 @@ from temporal_mirt import TMIRT, TMIRTResource
 # used to index the fields in with a line of text in the input data file
 linesplit = acc_util.linesplit
 
+
 def get_cmd_line_arguments():
-    parser = argparse.ArgumentParser(description="Train a temporal multi-dimensional item response theory (TMIRT) model.")
+    parser = argparse.ArgumentParser(
+        description="Train a temporal multi-dimensional item response theory"
+        " (TMIRT) model.")
     parser.add_argument("-a", "--num_abilities", type=int, default=2,
            help="Number of hidden ability units.")
     parser.add_argument("-s", "--sampling_num_steps", type=int, default=10,
@@ -56,7 +59,8 @@ def get_cmd_line_arguments():
         help="This defines the model that you'll use to parse the data\
         (look in accuracy_model_util for examples")
 
-    # DEBUG use parse_known_args rather than parse_args so can easily run it inside pylab
+    # DEBUG use parse_known_args rather than parse_args so can easily run it
+    # inside pylab
     options, _ = parser.parse_known_args()
 
     if options.output == '':
@@ -162,23 +166,24 @@ def check_gradients_E_step():
 
     a0 = model.a.copy()
     f0, df0 = model.E_dE_abilities()
-    # test gradients in a random order.  This lets us run check gradients on the
-    # full size model, but still statistically test every type of gradient.
+    # test gradients in a random order.  This lets us run check gradients on
+    # the full size model, but still statistically test every type of gradient.
     while True:
         ind0 = np.floor(np.random.rand()*a0.shape[0])
         ind1 = np.floor(np.random.rand()*a0.shape[1])
 
         model.a = a0.copy()
-        model.a[ind0,ind1] += step_size
+        model.a[ind0, ind1] += step_size
         f1, df1 = model.E_dE_abilities()
 
         df_true = np.sum((f1 - f0))/step_size
 
-        print "ind", ind0, ind1, "df pred", df0[ind0,ind1], "df true", df_true, "df pred - df true", df0[ind0,ind1] - df_true
+        print (
+            "ind", ind0, ind1, "df pred", df0[ind0, ind1], "df true", df_true,
+            "df pred - df true", df0[ind0, ind1] - df_true)
 
 
-
-# TODO -- numerical precision is worse than expected.  Make sure is using float64.
+# TODO: numerical precision is worse than expected. Make sure is using float64.
 def check_gradients_M_step():
     options = get_cmd_line_arguments()
     print >>sys.stderr, "Checking gradients M step.", options  # DEBUG
@@ -191,12 +196,14 @@ def check_gradients_M_step():
     Phi_l = np.prod(model.Phi.shape)
     J_l = np.prod(model.J.shape)
     W_ex_cr_l = np.prod(model.W_exercise_correct.shape)
-    print "Phi %d-%d"%(0,Phi_l),"J %d-%d"%(Phi_l,Phi_l+J_l),"W_ex_cr %d-%d"%(Phi_l+J_l,Phi_l+J_l+W_ex_cr_l)
+    print (
+        "Phi %d-%d" % (0, Phi_l), "J %d-%d" % (Phi_l, Phi_l+J_l),
+        "W_ex_cr %d-%d" % (Phi_l+J_l, Phi_l+J_l+W_ex_cr_l))
 
     theta = model.flatten_parameters()
     f0, df0 = model.E_dE(theta)
-    # test gradients in a random order.  This lets us run check gradients on the
-    # full size model, but still statistically test every type of gradient.
+    # test gradients in a random order.  This lets us run check gradients on
+    # the full size model, but still statistically test every type of gradient.
     test_order = range(theta.shape[0])
     random.shuffle(test_order)
     for ind in test_order:
@@ -209,13 +216,14 @@ def check_gradients_M_step():
         else:
             print "broken mapping to parameters"
 
-
         theta_offset = np.zeros(theta.shape)
         theta_offset[ind] = step_size
         f1, df1 = model.E_dE(theta+theta_offset)
         df_true = (f1 - f0)/step_size
 
-        print "ind", ind, "df pred", df0[ind], "df true", df_true, "df pred - df true", df0[ind] - df_true
+        print (
+            "ind", ind, "df pred", df0[ind], "df true", df_true,
+            "df pred - df true", df0[ind] - df_true)
 
 
 def main():
@@ -272,11 +280,10 @@ def main():
         np.savez("%s_epoch=%d.npz" % (options.output, epoch),
                  tmirt=model)
 
-        if False:
-            # compute log likelihood
-            if np.mod(epoch, 10) == 0 and epoch > 0:
-                log_likelihood_AIS(user_states[:options.ais_users],
-                                   couplings, options)
+        # TODO (jascha) compute log likelihood
+        # if np.mod(epoch, 10) == 0 and epoch > 0:
+        #     log_likelihood_AIS(
+        #         user_states[:options.ais_users], couplings, options)
 
 
 if __name__ == '__main__':
