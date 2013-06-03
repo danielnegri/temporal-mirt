@@ -381,7 +381,7 @@ class TMIRT(object):
         for ii in range(self.num_resources):
             self.J[:, :, ii] = (self.J[:, :, ii] + self.J[:, :, ii].T)/2.
 
-    def map_energy_abilities_to_users(self, E_sub, idx_pre):
+    def map_energy_abilities_to_users(self, E_sub, idx_pre=None):
         """
         takes an input with a contribution to the energy for each column in the
         a matrix.
@@ -405,9 +405,14 @@ class TMIRT(object):
         # set the stride long enough the same index never occurs twice in the
         # same indexing array on the left side of the assignment
         # (remembering that idx_pre is sorted)
-        for ii in range(self.users.longest_user):
-            E[self.users.a_to_user[idx_pre[ii::self.users.longest_user]]] \
-                += E_sub[ii::self.users.longest_user]
+        if idx_pre==None:
+            for ii in range(self.users.longest_user):
+                E[self.users.a_to_user[ii::self.users.longest_user]] \
+                    += E_sub[ii::self.users.longest_user]
+        else:
+            for ii in range(self.users.longest_user):
+                E[self.users.a_to_user[idx_pre[ii::self.users.longest_user]]] \
+                    += E_sub[ii::self.users.longest_user]
 
         # DEBUG
         #for ii in range(E_sub.shape[0]):
@@ -415,13 +420,13 @@ class TMIRT(object):
         #                += E_sub[ii]
         return E
 
-    def E_chain_start(self):
+    def E_chain_start(self, Ea=None):
         """ the energy contribution from t=1 (before any resource) per user """
         idx = self.users.index_lookup['chain start']
         a = self.users.a[:, idx]
         E = 0.5 * np.sum(a**2, axis=0)
-        E = self.map_energy_abilities_to_users(E, idx)
-        return E
+        Ea[idx] += E
+        return
 
     def dEda_accumulate_chain_start(self, da):
         """ the energy contribution from t=1 (before any resource) per user """
@@ -430,7 +435,7 @@ class TMIRT(object):
         da[:, idx] += a
         return da
 
-    def E_exercise(self, idx_exercise):
+    def E_exercise(self, idx_exercise, Ea=None):
         """
         The energy contribution from the conditional distribution over the
         exercise identified by idx_exercise.
@@ -439,9 +444,8 @@ class TMIRT(object):
         x, idx_x, a, idx_a, Wa = self.get_exercise_matrices(idx_exercise)
         E = np.log(1. + np.exp(-x*(Wa)))
 
-        E = self.map_energy_abilities_to_users(E.ravel(), idx_a)
-
-        return E
+        Ea[idx_a] += E
+        return
 
     def dEdW_exercise(self, idx_exercise):
         """ The derivative of the energy function, summed over all users,
@@ -461,7 +465,7 @@ class TMIRT(object):
         W = self.W_exercise_correct[idx_exercise, :-1]
         da[:, idx_a] += np.dot(W.reshape((-1, 1)), term1.reshape((1, -1)))
 
-    def E_resource(self, idx_resource):
+    def E_resource(self, idx_resource, Ea=None):
         """
         the energy contribution from the resource identified by "idx_resource",
         returned per user
@@ -479,9 +483,8 @@ class TMIRT(object):
         # dangerous to think of the energy here as corresponding to a single
         # column of a
 
-        E = self.map_energy_abilities_to_users(E, idx_pre)
-
-        return E
+        Ea[idx_pre] += E
+        return
 
     def dEda_accumulate_resource(self, idx_resource, da):
         idx_pre, idx_post, a_pre, a_post, a_err, J = \
@@ -545,7 +548,7 @@ class TMIRT(object):
 
     def E(self, a=None):
         """
-        accumulate the energy for each user
+        accumulate the energy for each column in the abilities vector
         """
 
         # TODO(jascha) is this ever called with a not equal None?
@@ -554,12 +557,12 @@ class TMIRT(object):
             a_old = self.users.a
             self.users.a = a
 
-        E = 0.
-        E += self.E_chain_start()
+        E = np.zeros((self.users.num_times_a))
+        self.E_chain_start(Ea=E)
         for idx_resource in range(self.num_resources):
-            E += self.E_resource(idx_resource)
+            self.E_resource(idx_resource, Ea=E)
         for idx_exercise in range(self.num_exercises):
-            E += self.E_exercise(idx_exercise)
+            self.E_exercise(idx_exercise, Ea=E)
 
         if a is not None:
             self.users.a = a_old
@@ -573,6 +576,7 @@ class TMIRT(object):
         """
         # calculate the energy
         E = self.E()
+        E = self.map_energy_abilities_to_users(E.ravel())
 
         da = np.zeros(self.users.a.shape)
         self.dEda_accumulate_chain_start(da)
