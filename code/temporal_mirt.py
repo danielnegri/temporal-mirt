@@ -347,11 +347,11 @@ class TMIRT(object):
         key = (exercise.type, exercise.name)
 
         # return the index, or assign the next available index and return that
-        if key in self.exercise_index:
-            return self.exercise_index[key]
-        else:
+        if not (key in self.exercise_index):
             self.exercise_index[key] = self.num_exercises
             self.num_exercises += 1
+
+        return self.exercise_index[key]
 
     def pop_parameter(self, theta, xx):
         """
