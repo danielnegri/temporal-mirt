@@ -428,12 +428,14 @@ class TMIRT(object):
         Ea[idx] += E
         return
 
-    def dEda_accumulate_chain_start(self, da):
+    def E_dEda_accumulate_chain_start(self, da, Ea):
         """ the energy contribution from t=1 (before any resource) per user """
         idx = self.users.index_lookup['chain start']
         a = self.users.a[:, idx]
         da[:, idx] += a
-        return da
+        E = 0.5 * np.sum(a**2, axis=0)
+        Ea[idx] += E
+        return
 
     def E_exercise(self, idx_exercise, Ea=None):
         """
@@ -456,7 +458,7 @@ class TMIRT(object):
         dEdW = np.dot(term1, a.T)
         return dEdW
 
-    def dEda_accumulate_exercise(self, idx_exercise, da):
+    def E_dEda_accumulate_exercise(self, idx_exercise, da, Ea):
         """ The derivative of the energy function in terms of a,
         for all users, for a single exercise. """
         x, idx_x, a, idx_a, Wa = self.get_exercise_matrices(idx_exercise)
@@ -464,6 +466,10 @@ class TMIRT(object):
         term1 = (-1./(1. + expxWa)*expxWa*x)
         W = self.W_exercise_correct[idx_exercise, :-1]
         da[:, idx_a] += np.dot(W.reshape((-1, 1)), term1.reshape((1, -1)))
+
+        E = np.log(1. + expxWa)
+        Ea[idx_a] += E
+        return
 
     def E_resource(self, idx_resource, Ea=None):
         """
@@ -486,7 +492,7 @@ class TMIRT(object):
         Ea[idx_pre] += E
         return
 
-    def dEda_accumulate_resource(self, idx_resource, da):
+    def E_dEda_accumulate_resource(self, idx_resource, da, Ea):
         idx_pre, idx_post, a_pre, a_post, a_err, J = \
                 self.get_abilities_matrices(idx_resource)
         Phi = self.Phi[:, :, idx_resource]
@@ -494,6 +500,17 @@ class TMIRT(object):
         da[:, idx_pre] += (
             -np.dot(Phi.T, np.dot(J, a_err))[:-1, :] - np.dot(J, a_err))
         da[:, idx_post] += np.dot(J, a_err)
+
+        E = 0.5 * np.sum(a_err*np.dot(J, a_err), axis=0)
+        # DEBUG check sign
+        # Gaussian normalization term
+        E += -np.sum(np.log(np.real(np.linalg.eig(J)[0])))  # *idx_pre.shape[0]
+        # NOTE adjacent columns in a are coupled, and that
+        # coupling energy is only assigned to one of the columns, so it's
+        # dangerous to think of the energy here as corresponding to a single
+        # column of a
+        Ea[idx_pre] += E
+        return
 
     def dEdPhi_resource(self, idx_resource):
         idx_pre, idx_post, a_pre, a_post, a_err, J = \
@@ -517,9 +534,8 @@ class TMIRT(object):
         idx_x = self.users.index_lookup[('exercise x', idx_exercise)]
         idx_a = self.users.index_lookup[('exercise a', idx_exercise)]
         x = self.users.x[:, idx_x]
-        a = self.users.a[:, idx_a]
         # add on a unit to act as a bias
-        a = np.vstack((a, np.ones((1, a.shape[1]))))
+        a = np.vstack((self.users.a[:, idx_a], np.ones((1, idx_a.shape[0]))))
 
         # make correctness in {-1,1}
         x = 2*x - 1
@@ -534,10 +550,9 @@ class TMIRT(object):
 
         idx_pre = self.users.index_lookup[('a pre resource', idx_resource)]
         idx_post = self.users.index_lookup[('a post resource', idx_resource)]
-        a_pre = self.users.a[:, idx_pre]
-        a_post = self.users.a[:, idx_post]
         # add on a unit to act as a bias
-        a_pre = np.vstack((a_pre, np.ones((1, a_pre.shape[1]))))
+        a_pre = np.vstack((self.users.a[:, idx_pre], np.ones((1, idx_pre.shape[0]))))
+        a_post = self.users.a[:, idx_post]
         # get the parameters for this resource
         Phi = self.Phi[:, :, idx_resource]
         J = self.J[:, :, idx_resource]
@@ -575,15 +590,17 @@ class TMIRT(object):
         to the abilities matrix.
         """
         # calculate the energy
-        E = self.E()
-        E = self.map_energy_abilities_to_users(E.ravel())
+        #E = self.E()
 
+        Ea = np.zeros((self.users.num_times_a))
         da = np.zeros(self.users.a.shape)
-        self.dEda_accumulate_chain_start(da)
+        self.E_dEda_accumulate_chain_start(da, Ea)
         for idx_resource in range(self.num_resources):
-            self.dEda_accumulate_resource(idx_resource, da)
+            self.E_dEda_accumulate_resource(idx_resource, da, Ea)
         for idx_exercise in range(self.num_exercises):
-            self.dEda_accumulate_exercise(idx_exercise, da)
+            self.E_dEda_accumulate_exercise(idx_exercise, da, Ea)
+
+        E = self.map_energy_abilities_to_users(Ea.ravel())
 
         # DEBUG check these gradients
         return E, da
