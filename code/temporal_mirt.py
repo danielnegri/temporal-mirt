@@ -630,53 +630,6 @@ class TMIRT(object):
 
         return E/self.users.num_users, dE/self.users.num_users
 
-    def invsqrtm(self, W):
-        """
-        Numpy/scipy only has limited support for sparse matrices, so we're
-        rolling our own function for matrix^(-1/2), using the Taylor
-        expansion.
-        If we weren't scaling by "mn" below, this would only be valid if all
-        eigenvalues of W had magnitude less than 1.  With the scaling, we need
-        all the eigenvalues of W/mn to have magnitude less than 1.
-        """
-
-        # number of terms to use in the Taylor series.  increase to get a more
-        # accurate approximation.
-        # DEBUG -- this is purely heuristic!
-        nterms = self.users.longest_user*10
-
-        # DEBUG experiment with different sparse matrix types.
-        # eg, make sure these aren't LIL, which is slower.
-
-        # A will accumulate the output
-        A = (
-            scipy.special.binom(-0.5, 0) *
-            scipy.sparse.eye(W.shape[0], W.shape[1]))
-        # B will accumulate the powers of (W-I)
-        B = scipy.sparse.eye(W.shape[0], W.shape[1])
-
-        # the closer W is to the identity, the faster this converges,
-        # so scale W so it is closer to the identity, and then apply
-        # the corresponding scaling to the inverse
-        ind = W.shape[0]
-        dg = W[ind, ind]
-        mn = np.mean(dg)
-        W = W/mn
-
-        # the terms in the series are (W-I), not W
-        W = W - scipy.sparse.eye(W.shape[0], W.shape[1])
-        # accumulate terms in the Taylor series
-        for i in range(nterms)+1:
-            coeff = scipy.special.binom(-0.5, i)
-            B = W.dot(B)
-            A += coeff*B
-
-        # scale the square root of the inverse of W to match the scaling of W
-        # above
-        A /= np.sqrt(mn)
-
-        return A
-
     def get_joint_gaussian_covariance_bias(self):
 
         full_J = np.zeros((self.users.num_times_a, self.num_abilities))
