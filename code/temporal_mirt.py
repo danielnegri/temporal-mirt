@@ -324,7 +324,7 @@ class TMIRT(object):
         self.sample_abilities_HMC_natgrad(num_steps=hmc_burnin)
         self.p_pred = 0.
         for ii in range(N_avg_samp):
-            tmirt.sample_abilities_HMC_natgrad(num_steps=hmc_steps)
+            self.sample_abilities_HMC_natgrad(num_steps=hmc_steps)
             self.p_pred += tmirt.predict_performance_once()/float(N_avg_samp)
 
         return self.p_pred
