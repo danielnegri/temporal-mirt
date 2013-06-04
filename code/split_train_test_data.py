@@ -23,7 +23,7 @@ for line in fileinput.input():
         else:
             for l in lines_current_user:
                 train.write(l)
-        current = []
+        lines_current_user = []
     lines_current_user.append(line)
 
 if num_users % test_every == 0:
