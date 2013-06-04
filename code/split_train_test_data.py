@@ -1,4 +1,7 @@
 import fileinput
+import accuracy_model_util as acc_util
+# used to index the fields in with a line of text in the input data file
+linesplit = acc_util.linesplit
 
 last_user = None
 num_users = 0
