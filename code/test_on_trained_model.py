@@ -59,8 +59,7 @@ tmirt = np.load("data/tmirt_file=train_abilities=3_epoch=17.npz")
 tmirt = tmirt['tmirt'][()]
 tmirt.reset_users()
 last_answers = load_data_to_test(tmirt)
-tmirt.predict_performance()
-tmirt.sample_abilities_HMC_natgrad()
+tmirt.predict_performance(avg_samp=20, hmc_steps=10, hmc_burnin=100)
 
 f = open('roc', 'w')
 for i in range(len(last_answers)):

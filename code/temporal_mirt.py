@@ -294,24 +294,42 @@ class TMIRT(object):
         return self.p_pred[
             self.exercise_index[('exercise', ex_name)], user_idx]
 
-    def predict_performance(self):
+
+    def predict_performance_once(self, N_avg_samp=1, hmc_steps=10, hmc_burnin=100):
         """
-        Returns a matrix of the predicted performance of every user on every
-        exercise.
-        Exercises are sorted in the order of their index, as provided by
-        exercise_index. Users are sorted by the order in which they were added.
+        Called by predict_performance.  Generates the predicted performance of
+        every student on every exercise for the current abilities state.
         """
 
         # get the most recent abilities vector for each student
         a = self.users.a[:, self.users.index_lookup['chain end']]
         # add on a unit to act as a bias
         a = np.vstack((a, np.ones((1, a.shape[1]))))
-
         Wa = np.dot(self.W_exercise_correct, a)
+        return 1./(1. + np.exp(-Wa))
 
-        self.p_pred = 1./(1. + np.exp(-Wa))
+
+    def predict_performance(self, N_avg_samp=1, hmc_steps=10, hmc_burnin=100):
+        """
+        Returns a matrix of the predicted performance of every user on every
+        exercise.
+        Exercises are sorted in the order of their index, as provided by
+        exercise_index. Users are sorted by the order in which they were added.
+
+        avg_samp - specifies the number of samples to average the probabilities
+        over.
+        hmc_steps - specifies how many HMC sampling steps to use between
+        evaluation of probabilities.
+        """
+
+        self.sample_abilities_HMC_natgrad(num_steps=hmc_burnin)
+        self.p_pred = 0.
+        for ii in range(N_avg_samp):
+            tmirt.sample_abilities_HMC_natgrad(num_steps=hmc_steps)
+            self.p_pred += tmirt.predict_performance_once()/float(N_avg_samp)
 
         return self.p_pred
+
 
     def reset_users(self):
         self.users = TMIRT_users(self)
