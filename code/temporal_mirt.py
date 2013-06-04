@@ -290,6 +290,10 @@ class TMIRT(object):
 
         self.reset_users()
 
+    def predict_user_exercise_performance(self, user_idx, ex_name):
+        return self.p_pred[
+            self.exercise_index[('exercise', ex_name)], user_idx]
+
     def predict_performance(self):
         """
         Returns a matrix of the predicted performance of every user on every
@@ -305,9 +309,9 @@ class TMIRT(object):
 
         Wa = np.dot(self.W_exercise_correct, a)
 
-        p_pred = 1./(1. + np.exp(-Wa))
+        self.p_pred = 1./(1. + np.exp(-Wa))
 
-        return p_pred
+        return self.p_pred
 
     def reset_users(self):
         self.users = TMIRT_users(self)
@@ -531,8 +535,12 @@ class TMIRT(object):
     def get_exercise_matrices(self, idx_exercise):
         # TODO (eliana): This fails when there's only one example of a given
         # exercise so it's never pre or something
-        idx_x = self.users.index_lookup[('exercise x', idx_exercise)]
-        idx_a = self.users.index_lookup[('exercise a', idx_exercise)]
+        if ('exercise x', idx_exercise) in self.users.index_lookup:
+            idx_x = self.users.index_lookup[('exercise x', idx_exercise)]
+            idx_a = self.users.index_lookup[('exercise a', idx_exercise)]
+        else:
+            idx_x = np.array([], dtype=int)
+            idx_a = np.array([], dtype=int)
         x = self.users.x[:, idx_x]
         # add on a unit to act as a bias
         a = np.vstack((self.users.a[:, idx_a], np.ones((1, idx_a.shape[0]))))
@@ -547,9 +555,12 @@ class TMIRT(object):
     def get_abilities_matrices(self, idx_resource):
         # get the pre and post abilities matrices that correspond to this
         # resource
-
-        idx_pre = self.users.index_lookup[('a pre resource', idx_resource)]
-        idx_post = self.users.index_lookup[('a post resource', idx_resource)]
+        if ('a pre resource', idx_resource) in self.users.index_lookup:
+            idx_pre = self.users.index_lookup[('a pre resource', idx_resource)]
+            idx_post = self.users.index_lookup[('a post resource', idx_resource)]
+        else:
+            idx_pre = np.array([], dtype=int)
+            idx_post = np.array([], dtype=int)
         # add on a unit to act as a bias
         a_pre = np.vstack((self.users.a[:, idx_pre], np.ones((1, idx_pre.shape[0]))))
         a_post = self.users.a[:, idx_post]
@@ -658,7 +669,7 @@ class TMIRT(object):
         return W, full_bias
 
     def sample_abilities_HMC_natgrad(
-            self, num_steps=1e2, epsilon=0.1, L=10, beta=0.5):
+            self, num_steps=50, epsilon=0.1, L=10, beta=0.5):
 
         # we will scale our dynamics by W (add ref)
         W, _ = self.get_joint_gaussian_covariance_bias()

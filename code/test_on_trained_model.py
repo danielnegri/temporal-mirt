@@ -59,12 +59,13 @@ tmirt = np.load("data/tmirt_file=train_abilities=3_epoch=17.npz")
 tmirt = tmirt['tmirt'][()]
 tmirt.reset_users()
 last_answers = load_data_to_test(tmirt)
+tmirt.predict_performance()
 tmirt.sample_abilities_HMC_natgrad()
 
 f = open('roc', 'w')
 for i in range(len(last_answers)):
     f.write(
-        str(last_answers[i].correct) + ',' +
+        str(1 if last_answers[i].correct else 0) + ' ' +
         str(tmirt.predict_user_exercise_performance(
             i, last_answers[i].name))+'\n')
 
