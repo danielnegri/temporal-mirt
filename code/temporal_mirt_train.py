@@ -128,10 +128,11 @@ def load_data(options):
             # the user and timestamp are shared by all row types.
             # load the user
             user = row[idx_pl.user]
-            if user != prev_user and len(resources) > 1:
+            if user != prev_user:
                 # We're getting a new user, so perform the reduce operation
                 # on our previous user
-                model.users.add_user(user, resources)
+                if len(resources) > 1:
+                    model.users.add_user(user, resources)
                 resources = []
             prev_user = user
             if row[idx_pl.rowtype] == 'problemlog':
@@ -147,7 +148,7 @@ def load_data(options):
         if len(resources) > 1:
             # flush the data for the final user, too
             model.users.add_user(user, resources)
-            resources = []
+        resources = []
 
         fileinput.close()
     # create parameter structures, change datatypes, etc

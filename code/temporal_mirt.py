@@ -102,9 +102,8 @@ class HMC(object):
 
     def calc_Ev(self):
         """ calculate the momentum contribution to the energy """
-        idx_pre = np.arange(self.v.shape[1], dtype=int)
         self.Ev = self.model.map_energy_abilities_to_users(
-            np.sum(0.5 * self.v**2, axis=0), idx_pre)
+            np.sum(0.5 * self.v**2, axis=0))
 
     def leapfrog(self):
         """ integrate leapfrog dynamics for self.L steps """
