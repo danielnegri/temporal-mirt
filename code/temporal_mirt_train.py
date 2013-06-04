@@ -38,6 +38,9 @@ def get_cmd_line_arguments():
                 large.""")
     parser.add_argument("-m", "--max_pass_lbfgs", type=int, default=5,
         help="The number of LBFGS descent steps to make per M step.")
+    parser.add_argument("-e", "--min_training_examples", type=int, default=5,
+        help="""The minimum number of resources a user must have used to be
+                included in the training dataset."")
     # The weight for an L2 regularizer on the parameters.  This can be very
     # small, but keeps the weights from running away in a weakly constrained
     # direction.
@@ -131,7 +134,7 @@ def load_data(options):
             if user != prev_user:
                 # We're getting a new user, so perform the reduce operation
                 # on our previous user
-                if len(resources) > 1:
+                if len(resources) > options.min_training_examples:
                     model.users.add_user(user, resources)
                 resources = []
             prev_user = user
@@ -145,7 +148,7 @@ def load_data(options):
                 row[idx_pl.time_taken] = float(row[idx_pl.time_taken])
             resources.append(TMIRTResource(row, idx_pl))
 
-        if len(resources) > 1:
+        if len(resources) > options.min_training_examples:
             # flush the data for the final user, too
             model.users.add_user(user, resources)
         resources = []
