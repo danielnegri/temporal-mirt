@@ -40,7 +40,7 @@ def get_cmd_line_arguments():
         help="The number of LBFGS descent steps to make per M step.")
     parser.add_argument("-e", "--min_training_examples", type=int, default=5,
         help="""The minimum number of resources a user must have used to be
-                included in the training dataset."")
+                included in the training dataset.""")
     # The weight for an L2 regularizer on the parameters.  This can be very
     # small, but keeps the weights from running away in a weakly constrained
     # direction.
