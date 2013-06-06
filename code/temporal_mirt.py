@@ -482,7 +482,7 @@ class TMIRT(object):
         x_correct, x_time, err, idx_x, a, idx_a, Wa_correct, Wa_time, sigma = \
             self.get_exercise_matrices(idx_exercise)
         E = np.log(1. + np.exp(-x_correct*(Wa_correct)))
-        E += np.sum(err**2, axis=0) / sigma**2 / 2.
+        E += err**2 / sigma**2 / 2.
         E += 0.5 * np.log(sigma**2)
         Ea[idx_a] += E
         return
@@ -498,10 +498,11 @@ class TMIRT(object):
         dEdW_correct = np.dot(term1, a.T)
 
         dEderr = err / sigma**2
-        dEdW_time = np.dot(dEderr, a.T)
+        dEdW_time = np.dot(dEderr.reshape((1, -1)), a.T)
+        #print dEderr.shape, a.shape
 
         dEdsigma_time =  np.sum(-err ** 2) / sigma ** 3
-        dEdsigma_time += np.max(err.shape) / sigma # 0.5 log sigma**2 term
+        dEdsigma_time += np.max(err.shape) / sigma  # 0.5 log sigma**2 term
 
         return dEdW_correct, dEdW_time, dEdsigma_time
 
@@ -522,7 +523,7 @@ class TMIRT(object):
         da[:, idx_a] += dEda_time
 
         E = np.log(1. + expxWa)
-        E += np.sum(err**2, axis=0) / sigma**2 / 2.
+        E += err**2 / sigma**2 / 2.
         E += 0.5 * np.log(sigma**2)
         Ea[idx_a] += E
         return
