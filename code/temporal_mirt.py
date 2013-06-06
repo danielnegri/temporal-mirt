@@ -401,8 +401,8 @@ class TMIRT(object):
         #    self.W_exercise_correct.flat, self.W_exercise_logtime.flat))
         return np.concatenate((self.Phi.flat, self.J.flat,
                             self.W_exercise_correct.flat,
-                            self.W_exercise_logtime,
-                            self.sigma_exercise_logtime))
+                            self.W_exercise_logtime.flat,
+                            self.sigma_exercise_logtime.flat))
 
     def unflatten_parameters(self, theta):
         theta = self.pop_parameter(theta, self.Phi)
@@ -481,7 +481,7 @@ class TMIRT(object):
         """
         x_correct, x_time, err, idx_x, a, idx_a, Wa_correct, Wa_time, sigma = \
             self.get_exercise_matrices(idx_exercise)
-        E = np.log(1. + np.exp(-x*(Wa)))
+        E = np.log(1. + np.exp(-x_correct*(Wa_correct)))
         E += np.sum(err**2, axis=0) / sigma**2 / 2.
         E += 0.5 * np.log(sigma**2)
         Ea[idx_a] += E
@@ -500,7 +500,10 @@ class TMIRT(object):
         dEderr = err / sigma**2
         dEdW_time = np.dot(dEderr, a.T)
 
-        return dEdW_correct, dEdW_time
+        dEdsigma_time =  np.sum(-err ** 2) / sigma ** 3
+        dEdsigma_time += np.max(err.shape) / sigma # 0.5 log sigma**2 term
+
+        return dEdW_correct, dEdW_time, dEdsigma_time
 
     def E_dEda_accumulate_exercise(self, idx_exercise, da, Ea):
         """ The derivative of the energy function in terms of a,
@@ -696,7 +699,7 @@ class TMIRT(object):
             dW_exercise_correct[idx_exercise, :], dW_exercise_logtime[idx_exercise, :], dsigma_exercise_logtime[idx_exercise] = \
                 self.dEdtheta_exercise(idx_exercise)
 
-        dE = np.concatenate((dPhi.flat, dJ.flat, dW_exercise_correct.flat, dW_exercise_logtime, dsigma_exercise_logtime))
+        dE = np.concatenate((dPhi.flat, dJ.flat, dW_exercise_correct.flat, dW_exercise_logtime.flat, dsigma_exercise_logtime.flat))
 
         return E/self.users.num_users, dE/self.users.num_users
 
