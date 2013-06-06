@@ -33,6 +33,12 @@ class TMIRTResource(object):
             print row
             raise StandardError("Unknown resource type")
 
+        # validation
+        if self.time_taken < 1.:
+            self.time_taken = 1.
+        if self.time_taken > 1000.:
+            self.time_taken = 1000.
+
 
 class HMC(object):
     """
@@ -188,7 +194,9 @@ class TMIRT_users(object):
         # abilities matrix a belongs to
         self.a_to_user = []
         # for holding exercise correctness and incorrectness
-        self.x = []
+        self.x_correct = []
+        # for holding log response time
+        self.x_logtime = []
         # holds an array of indices per key
         self.index_lookup = defaultdict(list)
 
@@ -217,8 +225,9 @@ class TMIRT_users(object):
                 idx_exercise = self.model.get_exercise_index(r)
                 self.index_lookup[('exercise a', idx_exercise)].append(
                                                             self.num_times_a)
-                # store the correctness value in an array
-                self.x.append(r.correct)
+                # store the correctness value and response time in an array
+                self.x_correct.append(r.correct)
+                self.x_logtime.append(np.log(r.time_taken))
                 self.index_lookup[('exercise x', idx_exercise)].append(
                                                             self.num_times_x)
                 self.num_times_x += 1
@@ -247,8 +256,9 @@ class TMIRT_users(object):
         self.a_to_user = np.asarray(self.a_to_user)
         #self.user_index_range = np.asarray(self.user_index_range)
 
-        # turn exercise correctness into a numpy array
-        self.x = np.asarray(self.x).T
+        # turn exercise correctness and time into a numpy array
+        self.x_correct = np.asarray(self.x_correct).T
+        self.x_logtime = np.asarray(self.x_logtime).T
 
         # abilities
         self.a = np.random.randn(self.model.num_abilities, self.num_times_a)
@@ -352,6 +362,7 @@ class TMIRT(object):
 
         # return the index, or assign the next available index and return that
         if not (key in self.resource_index):
+            assert(not self.finalized)
             self.resource_index[key] = self.num_resources
             self.num_resources += 1
 
@@ -369,6 +380,7 @@ class TMIRT(object):
 
         # return the index, or assign the next available index and return that
         if not (key in self.exercise_index):
+            assert(not self.finalized)
             self.exercise_index[key] = self.num_exercises
             self.num_exercises += 1
 
@@ -388,17 +400,21 @@ class TMIRT(object):
         #return np.concatenate((self.Phi.flat, self.J.flat,
         #    self.W_exercise_correct.flat, self.W_exercise_logtime.flat))
         return np.concatenate((self.Phi.flat, self.J.flat,
-                            self.W_exercise_correct.flat))
+                            self.W_exercise_correct.flat,
+                            self.W_exercise_logtime,
+                            self.sigma_exercise_logtime))
 
     def unflatten_parameters(self, theta):
         theta = self.pop_parameter(theta, self.Phi)
         theta = self.pop_parameter(theta, self.J)
         theta = self.pop_parameter(theta, self.W_exercise_correct)
-        #theta = self.pop_parameter(theta, self.W_exercise_logtime)
+        theta = self.pop_parameter(theta, self.W_exercise_logtime)
+        theta = self.pop_parameter(theta, self.sigma_exercise_logtime)
 
-        # DEBUG should enforce positive symmetric definite. this can
+        # DEBUG TODO(jascha)
+        # should enforce positive symmetric definite. this can
         # blow up if a J ever becomes negative
-        # enforce symmetric
+        # enforce symmetric J
         for ii in range(self.num_resources):
             self.J[:, :, ii] = (self.J[:, :, ii] + self.J[:, :, ii].T)/2.
 
@@ -463,32 +479,48 @@ class TMIRT(object):
         The energy contribution from the conditional distribution over the
         exercise identified by idx_exercise.
         """
-        # TODO(jascha) -- add 'time taken' to x and try to predict it
-        x, idx_x, a, idx_a, Wa = self.get_exercise_matrices(idx_exercise)
+        x_correct, x_time, err, idx_x, a, idx_a, Wa_correct, Wa_time, sigma = \
+            self.get_exercise_matrices(idx_exercise)
         E = np.log(1. + np.exp(-x*(Wa)))
-
+        E += np.sum(err**2, axis=0) / sigma**2 / 2.
+        E += 0.5 * np.log(sigma**2)
         Ea[idx_a] += E
         return
 
-    def dEdW_exercise(self, idx_exercise):
+    def dEdtheta_exercise(self, idx_exercise):
         """ The derivative of the energy function, summed over all users,
         for a single exercise. """
-        x, idx_x, a, idx_a, Wa = self.get_exercise_matrices(idx_exercise)
-        expxWa = np.exp(-x*(Wa))
-        term1 = (-1./(1. + expxWa)*expxWa*x)
-        dEdW = np.dot(term1, a.T)
-        return dEdW
+        x_correct, x_time, err, idx_x, a, idx_a, Wa_correct, Wa_time, sigma = \
+            self.get_exercise_matrices(idx_exercise)
+
+        expxWa = np.exp(-x_correct*(Wa_correct))
+        term1 = (-1./(1. + expxWa)*expxWa*x_correct)
+        dEdW_correct = np.dot(term1, a.T)
+
+        dEderr = err / sigma**2
+        dEdW_time = np.dot(dEderr, a.T)
+
+        return dEdW_correct, dEdW_time
 
     def E_dEda_accumulate_exercise(self, idx_exercise, da, Ea):
         """ The derivative of the energy function in terms of a,
         for all users, for a single exercise. """
-        x, idx_x, a, idx_a, Wa = self.get_exercise_matrices(idx_exercise)
-        expxWa = np.exp(-x*(Wa))
-        term1 = (-1./(1. + expxWa)*expxWa*x)
+        x_correct, x_time, err, idx_x, a, idx_a, Wa_correct, Wa_time, sigma = \
+            self.get_exercise_matrices(idx_exercise)
+
+        expxWa = np.exp(-x_correct*(Wa_correct))
+        term1 = (-1./(1. + expxWa)*expxWa*x_correct)
         W = self.W_exercise_correct[idx_exercise, :-1]
         da[:, idx_a] += np.dot(W.reshape((-1, 1)), term1.reshape((1, -1)))
 
+        W_time = self.W_exercise_logtime[idx_exercise, :-1]
+        dEderr = err / sigma**2
+        dEda_time = np.dot(W_time.reshape((-1, 1)), dEderr.reshape((1,-11)))
+        da[:, idx_a] += dEda_time
+
         E = np.log(1. + expxWa)
+        E += np.sum(err**2, axis=0) / sigma**2 / 2.
+        E += 0.5 * np.log(sigma**2)
         Ea[idx_a] += E
         return
 
@@ -558,16 +590,24 @@ class TMIRT(object):
         else:
             idx_x = np.array([], dtype=int)
             idx_a = np.array([], dtype=int)
-        x = self.users.x[:, idx_x]
+        x = self.users.x_correct[:, idx_x]
         # add on a unit to act as a bias
         a = np.vstack((self.users.a[:, idx_a], np.ones((1, idx_a.shape[0]))))
 
         # make correctness in {-1,1}
         x = 2*x - 1
 
-        W = self.W_exercise_correct[idx_exercise, :]
-        Wa = np.dot(W, a)
-        return x, idx_x, a, idx_a, Wa
+        W_correct = self.W_exercise_correct[[idx_exercise], :]
+        Wa_correct = np.dot(W_correct, a).reshape((-1))
+        W_time = self.W_exercise_logtime[[idx_exercise], :]
+        Wa_time = np.dot(W_time, a).reshape((-1))
+
+        x_time = self.users.x_logtime[:, idx_x]
+        err = (Wa_time - x_time)
+
+        sigma = self.sigma_exercise_logtime[idx_exercise]
+
+        return x, x_time, err, idx_x, a, idx_a, Wa_correct, Wa_time, sigma
 
     def get_abilities_matrices(self, idx_resource):
         # get the pre and post abilities matrices that correspond to this
@@ -650,11 +690,13 @@ class TMIRT(object):
             dJ[:, :, idx_resource] = self.dEdJ_resource(idx_resource)
 
         dW_exercise_correct = np.zeros(self.W_exercise_correct.shape)
+        dW_exercise_logtime = np.zeros(self.W_exercise_logtime.shape)
+        dsigma_exercise_logtime = np.zeros(self.sigma_exercise_logtime.shape)
         for idx_exercise in range(self.num_exercises):
-            dW_exercise_correct[idx_exercise, :] = \
-                self.dEdW_exercise(idx_exercise)
+            dW_exercise_correct[idx_exercise, :], dW_exercise_logtime[idx_exercise, :], dsigma_exercise_logtime[idx_exercise] = \
+                self.dEdtheta_exercise(idx_exercise)
 
-        dE = np.concatenate((dPhi.flat, dJ.flat, dW_exercise_correct.flat))
+        dE = np.concatenate((dPhi.flat, dJ.flat, dW_exercise_correct.flat, dW_exercise_logtime, dsigma_exercise_logtime))
 
         return E/self.users.num_users, dE/self.users.num_users
 
@@ -716,8 +758,6 @@ class TMIRT(object):
             self.num_abilities + 1)/np.sqrt(self.num_abilities)
         self.W_exercise_logtime = np.zeros((self.num_exercises,
             self.num_abilities + 1))
-        # exact zeros cause problems for sparse matrices
-        self.J += np.random.randn(*self.J.shape)*1e-10
-        self.Phi += np.random.randn(*self.Phi.shape)*1e-10
+        self.sigma_exercise_logtime = np.ones((self.num_exercises))
 
         self.finalized = True

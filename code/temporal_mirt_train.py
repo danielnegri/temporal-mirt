@@ -161,7 +161,6 @@ def load_data(options):
 
 
 def check_gradients_E_step():
-    # TODO(jascha) calculate gradients w.r.t. a, use to sample more efficiently
     options = get_cmd_line_arguments()
     print >>sys.stderr, "Checking gradients E step.", options  # DEBUG
 
@@ -187,7 +186,6 @@ def check_gradients_E_step():
             "df pred - df true", df0[ind0, ind1] - df_true)
 
 
-# TODO: numerical precision is worse than expected. Make sure is using float64.
 def check_gradients_M_step():
     options = get_cmd_line_arguments()
     print >>sys.stderr, "Checking gradients M step.", options  # DEBUG
