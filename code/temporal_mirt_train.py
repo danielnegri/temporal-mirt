@@ -161,14 +161,18 @@ def load_data(options):
 
 
 def check_gradients_E_step():
-    # TODO(jascha) calculate gradients w.r.t. a, use to sample more efficiently
+    """
+    test gradients by:
+    import temporal_mirt_train
+    temporal_mirt_train.check_gradients_E_step()
+    """
     options = get_cmd_line_arguments()
     print >>sys.stderr, "Checking gradients E step.", options  # DEBUG
 
     step_size = 1e-6
     model = load_data(options)
 
-    a0 = model.a.copy()
+    a0 = model.users.a.copy()
     f0, df0 = model.E_dE_abilities()
     # test gradients in a random order.  This lets us run check gradients on
     # the full size model, but still statistically test every type of gradient.
@@ -176,8 +180,8 @@ def check_gradients_E_step():
         ind0 = np.floor(np.random.rand()*a0.shape[0])
         ind1 = np.floor(np.random.rand()*a0.shape[1])
 
-        model.a = a0.copy()
-        model.a[ind0, ind1] += step_size
+        model.users.a = a0.copy()
+        model.users.a[ind0, ind1] += step_size
         f1, df1 = model.E_dE_abilities()
 
         df_true = np.sum((f1 - f0))/step_size
@@ -187,8 +191,12 @@ def check_gradients_E_step():
             "df pred - df true", df0[ind0, ind1] - df_true)
 
 
-# TODO: numerical precision is worse than expected. Make sure is using float64.
 def check_gradients_M_step():
+    """
+    test gradients by:
+    import temporal_mirt_train
+    temporal_mirt_train.check_gradients_M_step()
+    """
     options = get_cmd_line_arguments()
     print >>sys.stderr, "Checking gradients M step.", options  # DEBUG
 
@@ -200,9 +208,13 @@ def check_gradients_M_step():
     Phi_l = np.prod(model.Phi.shape)
     J_l = np.prod(model.J.shape)
     W_ex_cr_l = np.prod(model.W_exercise_correct.shape)
+    s_ex_tm_l = model.W_exercise_correct.shape[0]
     print (
         "Phi %d-%d" % (0, Phi_l), "J %d-%d" % (Phi_l, Phi_l+J_l),
-        "W_ex_cr %d-%d" % (Phi_l+J_l, Phi_l+J_l+W_ex_cr_l))
+        "W_ex_cr %d-%d" % (Phi_l+J_l, Phi_l+J_l+W_ex_cr_l),
+        "W_ex_tm %d-%d" % (Phi_l+J_l+W_ex_cr_l, Phi_l+J_l+2*W_ex_cr_l),
+        "sigma_ex_tm %d-%d" % (Phi_l+J_l+2*W_ex_cr_l, Phi_l+J_l+2*W_ex_cr_l+s_ex_tm_l),
+        )
 
     theta = model.flatten_parameters()
     f0, df0 = model.E_dE(theta)
@@ -212,11 +224,15 @@ def check_gradients_M_step():
     random.shuffle(test_order)
     for ind in test_order:
         if ind < Phi_l:
-            print "Phi",
+            print "Phi ",
         elif ind < Phi_l+J_l:
-            print "J",
+            print "J   ",
         elif ind < Phi_l+J_l+W_ex_cr_l:
-            print "W",
+            print "W_cr",
+        elif ind < Phi_l+J_l+2*W_ex_cr_l:
+            print "W_tm",
+        elif ind < Phi_l+J_l+2*W_ex_cr_l+s_ex_tm_l:
+            print "s_tm",
         else:
             print "broken mapping to parameters"
 
