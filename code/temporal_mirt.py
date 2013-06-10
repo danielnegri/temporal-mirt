@@ -2,6 +2,15 @@ import numpy as np
 import scipy.special
 from collections import defaultdict
 
+"""
+TODO:
+- code to initialize abilities at MAP values.
+- code to initialize TMIRT training using MIRT parameters.
+- check autocorrelation of sampler.
+- Write code to show by name the resources that will be most useful to improve performance on an exercise or group of exercises.  Make sure that these are sensible.  Assuming this is good, this will be directly relevant to the recommender engine.
+- Visualize the relationship between resources and between exercises captured by the TMIRT, using PCA first, and then something like tSNE.
+- Add code to update the abilities vector based on the delay between a student's interactions with resources.  My plan basically is to treat the time delay as another resource which is scaled by the duration of the time delay.  In slightly more detail, I intend to treat the time delay as a biased Gaussian diffusion, with the parameters of the diffusion learned.  This requires some math knowledge, but I could explain it pretty clearly.
+"""
 
 class TMIRTResource(object):
     """
@@ -318,7 +327,7 @@ class TMIRT(object):
         return 1./(1. + np.exp(-Wa))
 
 
-    def predict_performance(self, N_avg_samp=1, hmc_steps=10, hmc_burnin=100):
+    def predict_performance(self, N_avg_samp=1, hmc_steps=10, hmc_burnin=100, MAP_descent_steps=100):
         """
         Returns a matrix of the predicted performance of every user on every
         exercise.
@@ -329,7 +338,17 @@ class TMIRT(object):
         over.
         hmc_steps - specifies how many HMC sampling steps to use between
         evaluation of probabilities.
+        MAP_descent_steps - How many LBFGS steps to take to initialize the abilities at their MAP values.
+            Set to 0 to disable.
         """
+
+        if MAP_descent_steps > 0:
+            new_abilities, L, _ = scipy.optimize.fmin_l_bfgs_b(
+                model.E_dE_abilities,
+                self.users.a.ravel(),
+                disp=1,
+                maxfun=MAP_descent_steps, m=100)
+            self.users.a = new_abilities.reshape(self.users.a.shape)
 
         self.sample_abilities_HMC_natgrad(num_steps=hmc_burnin)
         self.p_pred = 0.
@@ -656,13 +675,16 @@ class TMIRT(object):
 
         return E
 
-    def E_dE_abilities(self):
+    def E_dE_abilities(self, a=None):
         """
         Return the energy per user and the energy gradient with respect
         to the abilities matrix.
         """
         # calculate the energy
         #E = self.E()
+
+        if not a == None:
+            self.users.a = a.reshape(self.users.a.shape)
 
         Ea = np.zeros((self.users.num_times_a))
         da = np.zeros(self.users.a.shape)
@@ -674,7 +696,10 @@ class TMIRT(object):
 
         E = self.map_energy_abilities_to_users(Ea.ravel())
 
-        # DEBUG check these gradients
+        if not a == None:
+            E = np.sum(E)
+            da = da.reshape(a.shape)
+]
         return E, da
 
     def E_dE(self, theta):
