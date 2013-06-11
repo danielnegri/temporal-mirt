@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.special
+import scipy.optimize
 from collections import defaultdict
 
 """
@@ -344,10 +345,10 @@ class TMIRT(object):
 
         if MAP_descent_steps > 0:
             new_abilities, L, _ = scipy.optimize.fmin_l_bfgs_b(
-                model.E_dE_abilities,
+                self.E_dE_abilities,
                 self.users.a.ravel(),
                 disp=1,
-                maxfun=MAP_descent_steps, m=100)
+                maxfun=MAP_descent_steps, m=10)
             self.users.a = new_abilities.reshape(self.users.a.shape)
 
         self.sample_abilities_HMC_natgrad(num_steps=hmc_burnin)
@@ -699,7 +700,7 @@ class TMIRT(object):
         if not a == None:
             E = np.sum(E)
             da = da.reshape(a.shape)
-]
+
         return E, da
 
     def E_dE(self, theta):
