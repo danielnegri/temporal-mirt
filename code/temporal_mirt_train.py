@@ -63,6 +63,9 @@ def get_cmd_line_arguments():
         (look in accuracy_model_util for examples")
     parser.add_argument("-b", "--bootstrap_mirt", type=str, default='',
         help="Initialize the parameters using the mIRT model with the given name.")
+    parser.add_argument("--bootstrap_epochs", type=int, default=5,
+        help="How many training epochs to fix the MIRT values for parameters\
+        shared by MIRT and TMIRT models.")
 
     # DEBUG use parse_known_args rather than parse_args so can easily run it
     # inside pylab
@@ -280,12 +283,12 @@ def main():
 
     model = load_data(options)
 
-    if options.bootstrap_mirt != '':
-        load_mirt_parameters(model, options.bootstrap_mirt)
-
     # now do num_epochs EM steps
     for epoch in range(options.num_epochs):
         print >>sys.stderr, "epoch %d, " % epoch,
+
+        if options.bootstrap_mirt != '' and epoch < options.bootstrap_epochs:
+            load_mirt_parameters(model, options.bootstrap_mirt)
 
         # Expectation step
         # Compute (and print) the energies during learning as a diagnostic.
