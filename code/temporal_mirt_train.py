@@ -47,7 +47,7 @@ def get_cmd_line_arguments():
     #parser.add_argument("-p", "--regularization", default=None) #1e-5)
     #DEBUG not currently implemented
 
-    #parser.add_argument("-u", "--ais_users", type=int, default=10,
+    #parser.add_argument("-u", "--ais_users", type=int, default=100,
     #  help="Number of users to use to compute log likelihood.")
     parser.add_argument("-v", "--ais_steps", type=int, default=1e5,
         help="""Maximum number of intermediate distributions (sampling steps)
@@ -61,6 +61,8 @@ def get_cmd_line_arguments():
     parser.add_argument("-i", "--indexer", type=str, default='plog',
         help="This defines the model that you'll use to parse the data\
         (look in accuracy_model_util for examples")
+    parser.add_argument("-b", "--bootstrap_mirt", type=str, default='',
+        help="Initialize the parameters using the mIRT model with the given name.")
 
     # DEBUG use parse_known_args rather than parse_args so can easily run it
     # inside pylab
@@ -246,12 +248,40 @@ def check_gradients_M_step():
             "df pred - df true", df0[ind] - df_true)
 
 
+def load_mirt_parameters(tmirt, npz_file):
+    """
+    Initialize the parameters for the TMIRT using the parameters from the MIRT
+    saved in npz_file.
+    """
+
+    mirt = np.load(npz_file)
+
+    mirt_theta = mirt["theta"][()]
+    mirt_exercise_ind_dict = mirt["exercise_ind_dict"][()]
+
+    assert(mirt_theta.num_abilities == tmirt.num_abilities)
+
+    # step through the exercises in the tmirt
+    for ex, idx_tmirt in tmirt.exercise_index.iteritems():
+        if ex[1] in mirt_exercise_ind_dict:
+            idx_mirt = mirt_exercise_ind_dict[ex[1]]
+        else:
+            print "missing ", ex[1], " in mirt model"
+            continue
+        tmirt.W_exercise_correct[idx_tmirt] = mirt_theta.W_correct[idx_mirt]
+        tmirt.W_exercise_logtime[idx_tmirt] = mirt_theta.W_time[idx_mirt]
+        tmirt.sigma_exercise_logtime[idx_tmirt] = mirt_theta.sigma_time[idx_mirt]
+
+
 def main():
     options = get_cmd_line_arguments()
 
     print >>sys.stderr, "Starting main.", options  # DEBUG
 
     model = load_data(options)
+
+    if options.bootstrap_mirt != '':
+        load_mirt_parameters(model, options.bootstrap_mirt)
 
     # now do num_epochs EM steps
     for epoch in range(options.num_epochs):
@@ -261,9 +291,6 @@ def main():
         # Compute (and print) the energies during learning as a diagnostic.
         # These should decrease.
 
-        #E_samples = model.sample_abilities_diffusion(
-        #    num_steps=options.sampling_num_steps,
-        #    epsilon=options.sampling_epsilon)
         E_samples = model.sample_abilities_HMC_natgrad(
             num_steps=options.sampling_num_steps,
             epsilon=options.sampling_epsilon)
@@ -288,7 +315,7 @@ def main():
             maxfun=options.max_pass_lbfgs, m=100)
         model.unflatten_parameters(new_theta)
 
-        # Print debuggin info on the progress of the training
+        # Print debugging info on the progress of the training
         print >>sys.stderr, "M log L %f, " % (-L/np.log(2)),
         print >>sys.stderr, "||theta|| %f, " % (
                 np.sqrt(np.sum(new_theta ** 2))),

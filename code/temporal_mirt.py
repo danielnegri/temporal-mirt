@@ -270,7 +270,7 @@ class TMIRT_users(object):
         self.x_correct = np.asarray(self.x_correct).T
         self.x_logtime = np.asarray(self.x_logtime).T
 
-        # abilities
+        # initialize abilities
         self.a = np.random.randn(self.model.num_abilities, self.num_times_a)
 
 
@@ -397,6 +397,8 @@ class TMIRT(object):
 
         # make the key
         key = (exercise.type, exercise.name)
+        # NOTE -- be careful changing the key structure.  it is hard coded elsewhere
+        # in the file, and also in load_mirt_parameters in temporal_mirt_train.py
 
         # return the index, or assign the next available index and return that
         if not (key in self.exercise_index):
