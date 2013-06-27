@@ -616,7 +616,7 @@ class TMIRT(object):
         else:
             idx_x = np.array([], dtype=int)
             idx_a = np.array([], dtype=int)
-        x = self.users.x_correct[:, idx_x]
+        x = self.users.x_correct[idx_x]
         # add on a unit to act as a bias
         a = np.vstack((self.users.a[:, idx_a], np.ones((1, idx_a.shape[0]))))
 
@@ -628,7 +628,7 @@ class TMIRT(object):
         W_time = self.W_exercise_logtime[[idx_exercise], :]
         Wa_time = np.dot(W_time, a).reshape((-1))
 
-        x_time = self.users.x_logtime[:, idx_x]
+        x_time = self.users.x_logtime[idx_x]
         err = (Wa_time - x_time)
 
         sigma = self.sigma_exercise_logtime[idx_exercise]
