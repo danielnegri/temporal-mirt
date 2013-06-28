@@ -18,6 +18,7 @@ def plot_learning_trajectories(tmirt, num_trajectories=25, min_length=10, use_ti
         user_i = np.random.randint(tmirt.users.num_users)
         idx = np.nonzero((tmirt.users.a_to_user.reshape((-1)) == user_i))[0]
         if idx.shape[0] > min_length:
+            num_plotted += 1
             y = tmirt.users.a[0, idx]
             plt.ylabel('a[0]')
             if tmirt.num_abilities > 1 and not use_time:
@@ -31,8 +32,41 @@ def plot_learning_trajectories(tmirt, num_trajectories=25, min_length=10, use_ti
             plt.plot(x[[0, -1]], y[[0, -1]], '-')
             plt.plot(x[0], y[0], 'go')
             plt.plot(x[-1], y[-1], 'yo')
+
+    plt.show()
+
+
+def plot_predicted_accuracy_vs_time(tmirt, num_trajectories=25, min_length=10):
+    """
+    plot the average accuracy on all exercises vs. time for num_trajectories
+    students with at least min_length terms in their histories
+    """
+    plt.figure()
+    plt.clf()
+    plt.ylabel('Average predicted accuracy')
+    plt.xlabel('Interactions')
+
+    num_plotted = 0
+
+    W = tmirt.W_exercise_correct
+
+    mean_pred_accuracy = 0.    
+    while num_plotted < num_trajectories:
+        user_i = np.random.randint(tmirt.users.num_users)
+        idx = np.nonzero((tmirt.users.a_to_user.reshape((-1)) == user_i))[0]
+        if idx.shape[0] > min_length:
             num_plotted += 1
 
+            pred_accuracy = np.zeros((idx.shape[0]))
+            for tt in range(idx.shape[0]):
+                a = tmirt.users.a[:, [idx[tt]]]
+                a = np.vstack((a, np.ones((1, 1))))
+                pred_accuracy[tt] = np.mean(sigmoid(np.dot(W, a)))
+            mean_pred_accuracy += pred_accuracy[:min_length]/num_trajectories
+
+            plt.plot(np.arange(idx.shape[0]), pred_accuracy, ':')
+
+    plt.plot(np.arange(min_length), mean_pred_accuracy, linewidth=4)
     plt.show()
 
 
@@ -312,5 +346,6 @@ def analyze(fname):
     tmirt = load_data(fname)
     generate_csv_files(tmirt)
     plot_learning_trajectories(tmirt)
+    plot_predicted_accuracy_vs_time(tmirt)
     plot_resource_exercise_improvement(tmirt)
     print_top_suggestions_per_exercise(tmirt)
