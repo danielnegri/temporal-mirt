@@ -11,6 +11,8 @@ TODO:
 - Write code to show by name the resources that will be most useful to improve performance on an exercise or group of exercises.  Make sure that these are sensible.  Assuming this is good, this will be directly relevant to the recommender engine.
 - Visualize the relationship between resources and between exercises captured by the TMIRT, using PCA first, and then something like tSNE.
 - Add code to update the abilities vector based on the delay between a student's interactions with resources.  My plan basically is to treat the time delay as another resource which is scaled by the duration of the time delay.  In slightly more detail, I intend to treat the time delay as a biased Gaussian diffusion, with the parameters of the diffusion learned.  This requires some math knowledge, but I could explain it pretty clearly.
+
+- Rotate a to fourier transform for HMC, so can scale different temporal frequencies differently?
 """
 
 class TMIRTResource(object):
