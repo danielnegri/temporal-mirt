@@ -2,9 +2,10 @@
 a temporal multidimensional item response theory model.
 """
 
+import argparse
+import datetime
 import fileinput
 import numpy as np
-import argparse
 import sys
 import scipy
 import scipy.optimize
@@ -279,13 +280,13 @@ def load_mirt_parameters(tmirt, npz_file):
 def main():
     options = get_cmd_line_arguments()
 
-    print >>sys.stderr, "Starting main.", options  # DEBUG
+    print >>sys.stderr, datetime.datetime.now(), "Starting main.", options
 
     model = load_data(options)
 
     # now do num_epochs EM steps
     for epoch in range(options.num_epochs):
-        print >>sys.stderr, "epoch %d, " % epoch,
+        print >>sys.stderr, datetime.datetime.now(), "epoch %d, " % epoch,
 
         if options.bootstrap_mirt != '' and epoch < options.bootstrap_epochs:
             load_mirt_parameters(model, options.bootstrap_mirt)
